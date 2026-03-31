@@ -12,7 +12,7 @@ import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-VERSION = "3.0.0"
+VERSION = "3.2.0"
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
 # Auto-load .env file if present (for standalone CLI use)

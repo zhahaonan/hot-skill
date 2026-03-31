@@ -52,8 +52,12 @@
 
 ### As AI Agent Skill（推荐，3 秒安装）
 
-适用于 Cursor / Claude Code / Cline / Windsurf 等 AI 编码工具：
+**OpenClaw 小龙虾：**
+```bash
+openclaw skills add https://github.com/zhahaonan/hot-creator
+```
 
+**Cursor / Claude Code / Cline / Windsurf：**
 ```bash
 git clone https://github.com/zhahaonan/hot-creator.git
 cd hot-creator
@@ -62,7 +66,7 @@ pip install -r requirements.txt   # 仅 5 个轻量包，~5 MB
 
 > 有 `uv` 的话更快：`uv pip install -r requirements.txt`（秒装）
 
-然后直接对 Agent 说：
+装好后直接对 Agent 说：
 
 ```
 "帮我看看现在什么热点最火，生成一份内容创作简报"

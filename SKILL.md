@@ -1,8 +1,10 @@
 ---
 name: hot-creator
-version: "3.1.0"
+version: "3.2.0"
 license: MIT
 description: 内容创作者热点情报 Harness — 从全网采集到 AI 创作简报的完整操作环境
+user-invocable: true
+metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-creator", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install core deps (pip)", "bins": ["python"]}]}}
 harness:
   tools: 13 atomic scripts (JSON pipe, --schema self-describing)
   knowledge: reference/*.md (on-demand) + SOP/*.md (deep-dive)
