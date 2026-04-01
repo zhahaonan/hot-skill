@@ -17,4 +17,5 @@ config.yaml
 # 编辑器
 .vscode/
 .idea/
+.cursor/
 *.swp

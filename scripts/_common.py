@@ -219,6 +219,62 @@ def format_material_item(item) -> str:
     return str(item).strip()
 
 
+def retry_request(fn, max_retries: int = 3, backoff: float = 1.0, on_fail: str = ""):
+    """
+    Retry a callable up to max_retries times with exponential backoff.
+    fn should be a zero-arg callable that may raise. Returns the result or raises.
+    """
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as e:
+            last_err = e
+            if attempt < max_retries - 1:
+                wait = backoff * (2 ** attempt)
+                print(f"[retry] Attempt {attempt+1} failed: {e}. Retrying in {wait:.1f}s...",
+                      file=sys.stderr)
+                time.sleep(wait)
+    if on_fail:
+        print(f"[retry] All {max_retries} attempts failed: {on_fail}", file=sys.stderr)
+    raise last_err
+
+
+def check_deps(packages: list[str]) -> list[str]:
+    """
+    Check if packages are importable. Returns list of missing package names.
+    Does NOT auto-install — caller decides what to do.
+    """
+    missing = []
+    for pkg in packages:
+        import_name = pkg.split(">=")[0].split("==")[0].strip()
+        if import_name == "pyyaml":
+            import_name = "yaml"
+        try:
+            __import__(import_name)
+        except ImportError:
+            missing.append(pkg)
+    return missing
+
+
+def ensure_deps(packages: list[str]):
+    """Check deps and auto-install missing ones via pip."""
+    missing = check_deps(packages)
+    if not missing:
+        return
+    print(f"[deps] Missing: {', '.join(missing)}. Auto-installing...", file=sys.stderr)
+    import subprocess
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--quiet"] + missing,
+            stdout=subprocess.DEVNULL,
+        )
+        print(f"[deps] Installed: {', '.join(missing)}", file=sys.stderr)
+    except subprocess.CalledProcessError as e:
+        fail(f"Failed to auto-install dependencies: {e}\n"
+             f"Run manually: pip install {' '.join(missing)}")
+
+
 def china_now() -> datetime:
     return datetime.now(timezone(timedelta(hours=8)))
 
@@ -364,6 +420,57 @@ def structured_error(tool_name: str, error: Exception, context: str = "") -> dic
         "context": context,
         "traceback": traceback.format_exc().split("\n")[-3] if traceback.format_exc() else "",
     }
+
+
+def parse_ai_json(text: str) -> dict | list:
+    """
+    Robustly parse AI-generated JSON: strips markdown fences, recovers truncated
+    arrays/objects, and handles common AI output quirks.
+    """
+    import re
+    cleaned = text.strip()
+
+    fence = re.search(r"```(?:json)?\s*\n(.*?)```", cleaned, re.DOTALL)
+    if fence:
+        cleaned = fence.group(1).strip()
+    elif cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    for suffix in ["]}", "}", "]", '"}', '"}]', '"}]}']:
+        try:
+            return json.loads(cleaned + suffix)
+        except json.JSONDecodeError:
+            continue
+
+    bracket = cleaned.find("[")
+    brace = cleaned.find("{")
+    if bracket >= 0 and (brace < 0 or bracket < brace):
+        start = bracket
+    elif brace >= 0:
+        start = brace
+    else:
+        raise json.JSONDecodeError("No JSON structure found in AI response", cleaned, 0)
+
+    fragment = cleaned[start:]
+    try:
+        return json.loads(fragment)
+    except json.JSONDecodeError:
+        for suffix in ["]}", "}", "]", '"}', '"}]', '"}]}']:
+            try:
+                return json.loads(fragment + suffix)
+            except json.JSONDecodeError:
+                continue
+
+    raise json.JSONDecodeError("Could not parse AI response as JSON", cleaned, 0)
 
 
 def _error_hint(message: str) -> str:

@@ -68,10 +68,10 @@ openclaw skills add https://github.com/zhahaonan/hot-creator
 git clone https://github.com/zhahaonan/hot-creator.git
 cd hot-creator
 pip install -r requirements.txt
-cp .env.example .env   # 填入你的 AI API Key
 ```
 
 > 有 `uv` 的话更快：`uv pip install -r requirements.txt`
+> **Skill 模式不需要配置 AI API Key** — Agent 自己就是 AI。
 
 装好后对 Agent 说：
 
@@ -111,10 +111,10 @@ python scripts/export_excel.py -i output/briefs.json --xlsx output/report.xlsx
 | **collect_social** | 社媒数据规范化器（接收 web-access 抓取的数据） | — | Core |
 | **monitor_competitor** | 竞品数据规范化器（接收 web-access 抓取的数据） | — | Core |
 | **enrich_topics** | 话题充实：合并 WebSearch 结果到趋势数据 | — | Core |
-| **trend_analyze** | AI 趋势评分与分类 | litellm | CLI |
-| **content_brief** | AI 内容创作简报（支持产品模式） | litellm | CLI |
-| **product_profile** | 产品资料 → 结构化画像 | litellm | CLI |
-| **industry_insight** | 行业趋势洞察 | litellm | CLI |
+| **trend_analyze** | AI 趋势评分与分类 | litellm (可选) | CLI |
+| **content_brief** | AI 内容创作简报（支持产品模式） | litellm (可选) | CLI |
+| **product_profile** | 产品资料 → 结构化画像 | litellm (可选) | CLI |
+| **industry_insight** | 行业趋势洞察 | litellm (可选) | CLI |
 | **knowledge_base** | 累积知识库（追加/搜索/图谱） | — | Core |
 | **export_excel** | Excel 报表（4 Sheet） | openpyxl | Core |
 | **export_obsidian** | Obsidian（Topics 按类别 + Copywriting 按平台） | — | Core |

@@ -43,13 +43,24 @@ SCHEMA = {
 DIRECTION_MAP = {"rising": "↑上升", "peak": "●顶峰", "declining": "↓下降", "emerging": "★萌芽"}
 
 THEME_KEYWORDS = {
-    "社会公平": ["公平", "不公", "争议", "黑幕", "举报", "维权", "监管", "上限", "规则"],
-    "年轻人焦虑": ["考研", "就业", "工资", "贷款", "负债", "内卷", "躺平", "进厂", "找工作", "PMI"],
-    "信任危机": ["举报", "造谣", "泄露", "偷税", "诬告", "真相", "反转", "官方回应"],
-    "技术变革": ["AI", "Claude", "源码", "编程", "开源", "泄露", "模型", "Anthropic", "Code"],
-    "政策监管": ["监管", "新规", "利率", "上限", "PMI", "扩张", "政策", "制造业"],
-    "情绪消费": ["吃瓜", "热搜", "粉丝", "举报", "营销号", "流量", "围观"],
-    "创业/职场": ["PMI", "制造业", "就业", "工厂", "招工", "工资", "转型", "从业者"],
+    "AI与技术": ["AI", "人工智能", "Claude", "GPT", "OpenAI", "DeepSeek", "Sora", "源码", "编程",
+                  "开源", "模型", "Anthropic", "大模型", "算法", "机器学习", "深度学习", "智能",
+                  "芯片", "半导体", "量子", "自动驾驶", "机器人"],
+    "资本与商业": ["融资", "估值", "上市", "收购", "亿美元", "亿元", "创业", "商业", "投资",
+                   "资本", "市值", "营收", "亏损", "盈利", "独角兽"],
+    "教育与成长": ["教育", "学习", "考研", "招聘", "薪资", "年薪", "教练", "竞赛", "培训",
+                   "大学", "学校", "课程", "人才", "毕业"],
+    "社会民生": ["公平", "安全", "食品", "争议", "维权", "民生", "新规", "政策", "影响",
+                  "价格", "涨价", "降价", "工资", "房价", "医疗"],
+    "国际地缘": ["战争", "冲突", "制裁", "谈判", "和平", "军事", "国防", "外交", "领土",
+                  "伊朗", "俄罗斯", "美国", "日本", "韩国", "中东"],
+    "信任与安全": ["泄露", "造谣", "曝光", "举报", "诈骗", "真相", "反转", "安全", "隐私",
+                   "数据泄露", "漏洞", "攻击"],
+    "年轻人关注": ["就业", "内卷", "躺平", "00后", "Z世代", "社交", "情感", "焦虑",
+                   "租房", "彩礼", "结婚", "遗嘱"],
+    "政策监管": ["监管", "新规", "法规", "条例", "实施", "整治", "处罚", "下架", "审查"],
+    "情绪与流量": ["热搜", "刷屏", "热议", "爆火", "出圈", "粉丝", "流量", "吃瓜",
+                   "逆袭", "致敬", "感动", "泪目"],
 }
 
 CATEGORY_COLORS = {
@@ -61,18 +72,55 @@ CATEGORY_COLORS = {
     "政治": "#1abc9c",
     "体育": "#f39c12",
     "健康": "#e91e63",
+    "国际": "#16a085",
+    "军事": "#2c3e50",
     "其他": "#95a5a6",
+    # AI / tech sub-categories (trend_analyze produces fine-grained categories)
+    "AI基础设施": "#2980b9",
+    "AI编程": "#8e44ad",
+    "AI教育": "#c0392b",
+    "AI应用": "#27ae60",
+    "行业洞察": "#2ecc71",
+    "创业故事": "#e67e22",
+    "家国情怀": "#e74c3c",
+    "政策解读": "#1abc9c",
 }
 
 THEME_COLORS = {
-    "社会公平": "#ff6b6b",
-    "年轻人焦虑": "#ffa502",
-    "信任危机": "#ff4757",
-    "技术变革": "#1e90ff",
+    "AI与技术": "#1e90ff",
+    "资本与商业": "#2ed573",
+    "教育与成长": "#e74c3c",
+    "社会民生": "#9b59b6",
+    "国际地缘": "#16a085",
+    "信任与安全": "#ff4757",
+    "年轻人关注": "#ffa502",
     "政策监管": "#2ed573",
-    "情绪消费": "#ff6348",
-    "创业/职场": "#ffa502",
+    "情绪与流量": "#ff6348",
 }
+
+
+def _category_color(category: str) -> str:
+    """Get color for a category, with fuzzy matching for sub-categories."""
+    if category in CATEGORY_COLORS:
+        return CATEGORY_COLORS[category]
+    cat_lower = category.lower()
+    for key, color in CATEGORY_COLORS.items():
+        if key in category or category in key:
+            return color
+    fuzzy_map = {
+        "ai": "#3498db", "tech": "#3498db", "科技": "#3498db",
+        "教育": "#e74c3c", "学": "#e74c3c",
+        "娱乐": "#e67e22", "明星": "#e67e22",
+        "财经": "#2ecc71", "金融": "#2ecc71", "商业": "#2ecc71",
+        "社会": "#9b59b6", "民生": "#9b59b6",
+        "国际": "#16a085", "地缘": "#16a085",
+        "体育": "#f39c12", "运动": "#f39c12",
+        "政": "#1abc9c",
+    }
+    for keyword, color in fuzzy_map.items():
+        if keyword in cat_lower:
+            return color
+    return "#95a5a6"
 
 
 def detect_themes(trend: dict) -> list[str]:
@@ -145,17 +193,19 @@ def find_combos(trends: list[dict], connections: list[dict]) -> list[dict]:
 
 
 def _combo_idea(t1: str, t2: str, theme: str) -> str:
-    """Generate a short combo content idea."""
+    """Generate a short combo content idea based on the two specific topics."""
     ideas = {
-        "社会公平": "从制度公平角度串联两个事件，做系列内容",
-        "年轻人焦虑": "以年轻人视角贯穿，引发强烈共鸣",
-        "信任危机": "围绕'我们该相信什么'做深度专题",
-        "技术变革": "技术浪潮下的机遇与隐患，做科普+观点",
-        "政策监管": "政策组合拳解读，对普通人的影响汇总",
-        "情绪消费": "反思舆论操控，做媒介素养内容",
-        "创业/职场": "经济数据+就业现实，做职场规划指南",
+        "AI与技术": f"从「{t1[:8]}」和「{t2[:8]}」看 AI 行业走向，做深度科普+观点",
+        "资本与商业": f"「{t1[:8]}」×「{t2[:8]}」的商业逻辑解读，做投资/创业视角分析",
+        "教育与成长": f"串联「{t1[:8]}」与「{t2[:8]}」，做教育趋势+个人成长指南",
+        "社会民生": f"「{t1[:8]}」+「{t2[:8]}」对普通人的影响汇总，做民生解读",
+        "国际地缘": f"从「{t1[:8]}」到「{t2[:8]}」看国际格局变化，做时事分析",
+        "信任与安全": f"「{t1[:8]}」×「{t2[:8]}」背后的信任问题，做深度专题",
+        "年轻人关注": f"以年轻人视角串联「{t1[:8]}」和「{t2[:8]}」，引发共鸣",
+        "政策监管": f"「{t1[:8]}」+「{t2[:8]}」的政策组合拳解读",
+        "情绪与流量": f"「{t1[:8]}」和「{t2[:8]}」为何刷屏？做传播机制分析",
     }
-    return ideas.get(theme, "跨话题视角组合，提供独特内容角度")
+    return ideas.get(theme, f"「{t1[:8]}」×「{t2[:8]}」跨话题组合，提供独特视角")
 
 
 def build_platform_strategy(trends: list[dict]) -> dict:
@@ -164,15 +214,25 @@ def build_platform_strategy(trends: list[dict]) -> dict:
     platform_topics = defaultdict(list)
 
     for t in trends:
+        priority = []
         brief = t.get("brief", {})
-        if not isinstance(brief, dict) or "error" in brief:
-            continue
-        rec = brief.get("recommendation", {})
-        priority = rec.get("platform_priority", [])
+        content_brief = t.get("content_brief", {})
+
+        if isinstance(brief, dict) and "error" not in brief and brief:
+            rec = brief.get("recommendation", {})
+            priority = rec.get("platform_priority", [])
+        elif isinstance(content_brief, dict) and content_brief:
+            raw = content_brief.get("platforms", [])
+            priority = [p.split("（")[0].split("(")[0].strip() for p in raw]
+
+        if not priority:
+            priority = t.get("platforms", [])
+
         for i, p in enumerate(priority):
             platform_count[p] += len(priority) - i
-            if t.get("topic", "") not in platform_topics[p]:
-                platform_topics[p].append(t.get("topic", "")[:15])
+            topic_short = t.get("topic", "")[:15]
+            if topic_short not in platform_topics[p]:
+                platform_topics[p].append(topic_short)
 
     sorted_platforms = sorted(platform_count.items(), key=lambda x: -x[1])
     return {
@@ -239,15 +299,18 @@ def build_graph_data(trends: list[dict], date: str) -> dict:
         group = "hot" if is_hot else ("emerging" if is_emerging else "moderate")
 
         brief = t.get("brief", {})
+        content_brief = t.get("content_brief", {})
         angles = []
         first_platform = ""
         trending_window = ""
-        if isinstance(brief, dict) and "error" not in brief:
+
+        if isinstance(brief, dict) and "error" not in brief and brief:
             for a in brief.get("angles", [])[:3]:
                 angles.append({
                     "name": a.get("name", ""),
                     "platform": a.get("best_platform", ""),
                     "appeal": a.get("appeal", ""),
+                    "how": a.get("how", a.get("description", "")),
                 })
             rec = brief.get("recommendation", {})
             first_platform = rec.get("first_platform", "")
@@ -256,13 +319,27 @@ def build_graph_data(trends: list[dict], date: str) -> dict:
                 first_platform = prio[0] if prio else ""
             trending_window = rec.get("trending_window", rec.get("best_time", ""))
 
+        elif isinstance(content_brief, dict) and content_brief:
+            angle_text = content_brief.get("angle", "")
+            if angle_text:
+                angles.append({
+                    "name": angle_text[:40],
+                    "platform": ", ".join(content_brief.get("platforms", [])[:2]),
+                    "appeal": "高" if score >= 85 else ("中" if score >= 70 else ""),
+                })
+            for kp in content_brief.get("key_points", [])[:2]:
+                angles.append({"name": kp, "platform": "", "appeal": ""})
+            cb_plats = content_brief.get("platforms", [])
+            if cb_plats:
+                first_platform = cb_plats[0].split("（")[0].split("(")[0]
+
         nodes.append({
             "id": topic,
             "type": "topic",
             "group": group,
             "score": score,
             "category": category,
-            "color": CATEGORY_COLORS.get(category, "#95a5a6"),
+            "color": _category_color(category),
             "direction": DIRECTION_MAP.get(direction, ""),
             "platforms": platforms,
             "themes": themes[:3],
@@ -336,6 +413,7 @@ def build_graph_data(trends: list[dict], date: str) -> dict:
 def wrap_html(graph_data: dict, date: str) -> str:
     """Generate standalone HTML with D3 force-directed graph (Obsidian-style)."""
     data_json = json.dumps(graph_data, ensure_ascii=False)
+    category_colors_json = json.dumps(CATEGORY_COLORS, ensure_ascii=False)
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -785,6 +863,8 @@ if (DATA.cumulative && DATA.stats.kb_topics) {{
 }}
 document.getElementById("stats").textContent = statsText;
 
+const CATEGORY_COLORS = {category_colors_json};
+
 const categories = [...new Set(allNodes.filter(n => n.type === "topic").map(n => n.category))];
 let legendHtml = categories.map(c =>
   `<div class="legend-item"><div class="legend-dot" style="background:${{CATEGORY_COLORS[c] || '#95a5a6'}}"></div>${{c}}</div>`
@@ -792,8 +872,6 @@ let legendHtml = categories.map(c =>
 legendHtml += `<div class="legend-item" style="margin-top:6px"><div class="legend-dot" style="background:rgba(130,130,255,0.5)"></div>主题关联</div>`;
 legendHtml += `<div class="legend-item"><div class="legend-dot" style="background:#7c8db5"></div>平台</div>`;
 document.getElementById("legend").innerHTML = legendHtml;
-
-const CATEGORY_COLORS = ${{json.dumps(CATEGORY_COLORS, ensure_ascii=False)}};
 
 const comboList = document.getElementById("comboList");
 DATA.combos.forEach(c => {{

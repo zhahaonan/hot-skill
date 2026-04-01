@@ -117,21 +117,31 @@ def build_overview_sheet(wb, trends):
 
 def build_brief_sheet(wb, trends):
     ws = wb.create_sheet("创作简报")
-    headers = ["话题", "热度", "创作角度", "标题建议", "推荐形式", "最佳时间"]
+    headers = ["话题", "热度", "洞察", "创作角度", "热词/标签", "标题建议", "推荐形式", "最佳时间"]
     ws.append(headers)
     style_header(ws, len(headers))
 
     for t in trends:
-        brief = t.get("brief", {})
+        brief = t.get("brief", t.get("content_brief", {}))
         if isinstance(brief, dict) and "error" in brief:
-            ws.append([t.get("topic", ""), t.get("score", 0), f"错误: {brief['error']}", "", "", ""])
+            ws.append([t.get("topic", ""), t.get("score", 0), f"错误: {brief['error']}", "", "", "", "", ""])
             continue
+
+        insight = brief.get("insight", "")
+        if isinstance(insight, dict):
+            insight = f"{insight.get('core', '')} {insight.get('why_hot', '')} {insight.get('opportunity', '')}"
 
         angles = brief.get("angles", [])
         angles_str = "\n".join(
-            f"• {a.get('name', '')}: {a.get('description', '')} [{a.get('best_platform', '')}]"
+            f"• {a.get('name', '')}: {a.get('description', '') or a.get('how', '')} [{a.get('best_platform', '')}]"
             for a in angles
         ) if angles else ""
+
+        keywords = brief.get("hot_keywords", [])
+        keywords_str = ", ".join(keywords) if keywords else ""
+        if not keywords_str:
+            tags = t.get("content_brief", {}).get("tags", [])
+            keywords_str = ", ".join(tags) if tags else ""
 
         titles = brief.get("titles", {})
         titles_str = flatten_titles(titles)
@@ -143,7 +153,9 @@ def build_brief_sheet(wb, trends):
         row = [
             t.get("topic", ""),
             t.get("score", 0),
+            insight,
             angles_str,
+            keywords_str,
             titles_str,
             best_format,
             best_time,
@@ -206,15 +218,17 @@ PLATFORM_NAMES = {"douyin": "抖音", "xiaohongshu": "小红书",
                   "gongzhonghao": "公众号", "zhihu": "知乎", "bilibili": "B站"}
 
 
+SHORTFORM_LABEL = {"short_form": "短视频/小红书", "long_form": "公众号/知乎"}
+
 def build_titles_sheet(wb, trends):
-    """Per-platform title matrix: one row per topic × title."""
+    """Per-platform title matrix: one row per topic x title."""
     ws = wb.create_sheet("平台标题")
     headers = ["话题", "类别", "平台", "标题"]
     ws.append(headers)
     style_header(ws, len(headers))
 
     for t in trends:
-        brief = t.get("brief", {})
+        brief = t.get("brief", t.get("content_brief", {}))
         if isinstance(brief, dict) and "error" in brief:
             continue
         titles = brief.get("titles", {})
@@ -222,13 +236,26 @@ def build_titles_sheet(wb, trends):
             continue
         topic = t.get("topic", "")
         category = t.get("category", "")
-        for pkey in PLATFORM_KEYS:
-            vals = titles.get(pkey, [])
-            if isinstance(vals, str):
-                vals = [vals]
-            pname = PLATFORM_NAMES.get(pkey, pkey)
-            for title in vals:
-                ws.append([topic, category, pname, title])
+
+        has_platform_keys = any(k in titles for k in PLATFORM_KEYS)
+        if has_platform_keys:
+            for pkey in PLATFORM_KEYS:
+                vals = titles.get(pkey, [])
+                if isinstance(vals, str):
+                    vals = [vals]
+                pname = PLATFORM_NAMES.get(pkey, pkey)
+                for title in vals:
+                    if title:
+                        ws.append([topic, category, pname, title])
+        else:
+            for key, val in titles.items():
+                label = SHORTFORM_LABEL.get(key, key)
+                if isinstance(val, list):
+                    for title in val:
+                        if title:
+                            ws.append([topic, category, label, title])
+                elif val:
+                    ws.append([topic, category, label, val])
 
     for row in ws.iter_rows(min_row=2, max_col=len(headers)):
         for cell in row:

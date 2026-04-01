@@ -107,7 +107,7 @@ def build_related_section(topic_name: str, kb: dict, today_topics: list[str], da
 
 def build_topic_note(trend: dict, date: str, kb: dict = None, today_topics: list[str] = None) -> str:
     """Build a single topic markdown note."""
-    brief = trend.get("brief", {})
+    brief = trend.get("brief", trend.get("content_brief", {}))
     topic = trend.get("topic", "Unknown")
     score = trend.get("score", 0)
     direction = trend.get("direction", "")
@@ -138,16 +138,39 @@ def build_topic_note(trend: dict, date: str, kb: dict = None, today_topics: list
     ]
 
     if isinstance(brief, dict) and "error" not in brief:
+        insight = brief.get("insight", "")
+        if insight:
+            lines.append("## 核心洞察")
+            if isinstance(insight, dict):
+                if insight.get("core"):
+                    lines.append(f"- **核心矛盾**: {insight['core']}")
+                if insight.get("why_hot"):
+                    lines.append(f"- **为什么火**: {insight['why_hot']}")
+                if insight.get("opportunity"):
+                    lines.append(f"- **创作机会**: {insight['opportunity']}")
+            else:
+                lines.append(f"{insight}")
+            lines.append("")
+
+        hot_keywords = brief.get("hot_keywords", [])
+        if hot_keywords:
+            lines.append("## 热词/标签")
+            lines.append(f"`{'` `'.join(hot_keywords)}`")
+            lines.append("")
+
         angles = brief.get("angles", [])
         if angles:
             lines.append("## 创作角度")
             for a in angles:
                 name = a.get("name", "")
-                desc = a.get("description", "")
+                desc = a.get("description", "") or a.get("how", "")
                 plat = a.get("best_platform", "")
                 appeal = a.get("appeal", "")
                 lines.append(f"### {name}")
-                lines.append(f"- {desc}")
+                if desc:
+                    lines.append(f"- {desc}")
+                if a.get("product_role"):
+                    lines.append(f"- 产品角色：{a['product_role']}")
                 lines.append(f"- 适合平台：{plat} | 吸引力：{appeal}")
                 lines.append("")
 
@@ -180,7 +203,12 @@ def build_topic_note(trend: dict, date: str, kb: dict = None, today_topics: list
                     lines.append(f"**副标题**: {xhs['cover_subtitle']}")
                 slides = xhs.get("slides", xhs.get("key_points", []))
                 for i, pt in enumerate(slides, 1):
-                    lines.append(f"{i}. {pt}")
+                    if isinstance(pt, dict):
+                        lines.append(f"{i}. **{pt.get('title', '')}**: {pt.get('content', '')}")
+                        if pt.get("image_note"):
+                            lines.append(f"   配图：{pt['image_note']}")
+                    else:
+                        lines.append(f"{i}. {pt}")
                 if xhs.get("body_structure"):
                     lines.append(f"\n**结构**: {xhs['body_structure']}")
                 all_tags = (
@@ -203,7 +231,10 @@ def build_topic_note(trend: dict, date: str, kb: dict = None, today_topics: list
                     if isinstance(sec, dict):
                         lines.append(f"#### {sec.get('heading', '')}")
                         lines.append(f"- 核心论点: {sec.get('core_point', '')}")
-                        lines.append(f"- 论据方向: {sec.get('evidence', '')}")
+                        if sec.get("evidence"):
+                            lines.append(f"- 论据方向: {sec['evidence']}")
+                        if sec.get("product_mention"):
+                            lines.append(f"- 产品植入: {sec['product_mention']}")
                     else:
                         lines.append(f"- {sec}")
                 conclusion = article.get("conclusion", article.get("conclusion_strategy", ""))
@@ -463,7 +494,7 @@ def build_weekly_digest(kb: dict, date: str) -> str:
 
 def build_copywriting_note(trend: dict, platform_key: str, platform_name: str, date: str) -> str:
     """Build a platform-specific copywriting draft from brief outlines."""
-    brief = trend.get("brief", {})
+    brief = trend.get("brief", trend.get("content_brief", {}))
     if not isinstance(brief, dict) or "error" in brief:
         return ""
 
@@ -537,7 +568,12 @@ def build_copywriting_note(trend: dict, platform_key: str, platform_name: str, d
         if slides:
             lines.append("## 图片内容")
             for i, pt in enumerate(slides, 1):
-                lines.append(f"**第{i}张**: {pt}")
+                if isinstance(pt, dict):
+                    lines.append(f"**第{i}张**: **{pt.get('title', '')}** — {pt.get('content', '')}")
+                    if pt.get("image_note"):
+                        lines.append(f"  配图：{pt['image_note']}")
+                else:
+                    lines.append(f"**第{i}张**: {pt}")
             lines.append("")
         body = xhs.get("body_structure", "")
         if body:
@@ -582,7 +618,10 @@ def build_copywriting_note(trend: dict, platform_key: str, platform_name: str, d
                 if isinstance(sec, dict):
                     lines.append(f"### {sec.get('heading', '')}")
                     lines.append(f"- 核心论点: {sec.get('core_point', '')}")
-                    lines.append(f"- 论据方向: {sec.get('evidence', '')}")
+                    if sec.get("evidence"):
+                        lines.append(f"- 论据方向: {sec['evidence']}")
+                    if sec.get("product_mention"):
+                        lines.append(f"- 产品植入: {sec['product_mention']}")
                     if sec.get("words"):
                         lines.append(f"- 建议字数: {sec['words']}字")
                     lines.append("")
@@ -669,8 +708,8 @@ def main():
         topic_paths.append(str(note_path))
 
         if not args.no_copywriting:
-            brief = trend.get("brief", {})
-            if isinstance(brief, dict) and "error" not in brief:
+            brief = trend.get("brief", trend.get("content_brief", {}))
+            if isinstance(brief, dict) and "error" not in brief and brief.get("outlines"):
                 for pkey, pname in PLATFORM_MAP.items():
                     draft = build_copywriting_note(trend, pkey, pname, date)
                     if draft:

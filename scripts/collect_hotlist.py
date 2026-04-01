@@ -13,7 +13,7 @@ import time
 import random
 from _common import (
     base_argparser, handle_schema, read_json_input, write_json_output,
-    fail, NEWSNOW_API, PLATFORMS, platform_name
+    fail, NEWSNOW_API, PLATFORMS, platform_name, retry_request
 )
 
 SCHEMA = {
@@ -134,7 +134,12 @@ def main():
 
     for platform_id in platforms:
         try:
-            items = fetch_platform(platform_id, proxy_url)
+            items = retry_request(
+                lambda pid=platform_id: fetch_platform(pid, proxy_url),
+                max_retries=3,
+                backoff=1.0,
+                on_fail=f"{platform_name(platform_id)} fetch failed after retries",
+            )
             all_items.extend(items)
             print(f"[collect_hotlist] {platform_name(platform_id)}: {len(items)} items", file=sys.stderr)
         except Exception as e:

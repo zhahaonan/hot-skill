@@ -12,13 +12,10 @@ import json
 from pathlib import Path
 from _common import (
     base_argparser, handle_schema, read_json_input, write_json_output,
-    fail, SKILL_ROOT
+    fail, SKILL_ROOT, parse_ai_json
 )
 
-try:
-    import litellm
-except ImportError:
-    fail("litellm not installed. Run: pip install -r requirements.txt")
+litellm = None  # lazy import — only needed for CLI mode
 
 SCHEMA = {
     "name": "content_brief",
@@ -136,8 +133,16 @@ def load_brief_prompt() -> tuple[str, str]:
 
 def call_ai(system_prompt: str, user_prompt: str, model: str, api_key: str, api_base: str = None,
             batch_size: int = 1) -> str:
-    """Call AI model via litellm."""
-    max_tokens = max(16000, min(64000, 16000 * batch_size))
+    """Call AI model via litellm. Only used in standalone CLI mode."""
+    global litellm
+    if litellm is None:
+        try:
+            import litellm as _litellm
+            litellm = _litellm
+        except ImportError:
+            fail("litellm not installed. Standalone CLI mode requires: pip install litellm\n"
+                 "As a Skill, Agent does the AI analysis — this script is not needed.")
+    max_tokens = max(16000, min(128000, 16000 * batch_size))
     kwargs = {
         "model": model,
         "messages": [
@@ -156,50 +161,12 @@ def call_ai(system_prompt: str, user_prompt: str, model: str, api_key: str, api_
     return response.choices[0].message.content.strip()
 
 
-def _try_fix_truncated_json(text: str) -> dict | None:
-    """Attempt to fix truncated JSON by closing open brackets/braces."""
-    import re
-    for trim in range(min(200, len(text)), 0, -1):
-        candidate = text[:len(text) - trim + 1]
-        last_bracket = max(candidate.rfind('}'), candidate.rfind(']'))
-        if last_bracket < 0:
-            continue
-        candidate = candidate[:last_bracket + 1]
-        opens = candidate.count('{') - candidate.count('}')
-        open_arr = candidate.count('[') - candidate.count(']')
-        candidate += ']' * open_arr + '}' * opens
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-    return None
-
-
 def parse_ai_response(text: str) -> dict:
-    """Parse AI response, handling markdown code fences, truncation, and various key names."""
-    import re
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        cleaned = "\n".join(lines)
+    """Parse AI response using the shared robust parser, then normalize key names."""
+    result = parse_ai_json(text)
 
-    result = None
-    try:
-        result = json.loads(cleaned)
-    except json.JSONDecodeError:
-        match = re.search(r'\{[\s\S]*\}', cleaned)
-        if match:
-            try:
-                result = json.loads(match.group())
-            except json.JSONDecodeError:
-                result = _try_fix_truncated_json(match.group())
-        if result is None:
-            result = _try_fix_truncated_json(cleaned)
-        if result is None:
-            raise json.JSONDecodeError("Cannot parse AI response after all fallbacks", cleaned, 0)
+    if isinstance(result, list):
+        result = {"briefed_trends": result}
 
     if isinstance(result, dict) and "briefed_trends" not in result:
         for key in ("briefs", "creation_briefs", "trends", "data", "results", "content_briefs"):
@@ -216,17 +183,21 @@ def parse_ai_response(text: str) -> dict:
     return result
 
 
-PRODUCT_BRIEF_SYSTEM = """你是一个品牌内容策略师。你的工作是帮产品找到与热点之间的「真实连接」，而不是把产品硬塞进每个热点里。
+PRODUCT_BRIEF_SYSTEM = """你是一个品牌内容策略师 + 资深文案人。你输出的不是「建议」，而是**拿来就能发的完整内容方案**。
 
 你的判断标准：
-- 如果一个热点跟这个产品没关系，就直说「关联弱，不建议硬蹭」，给 product_relevance: low
-- 如果有关系，要说清楚关系到底是什么——是用户群体重叠？是解决了同一个痛点？是行业上下游？
-- 结合方式必须让用户看完觉得「哦这确实有关系」，而不是「这也太牵强了」
+- 如果一个热点跟这个产品没关系，就直说「关联弱，不建议硬蹭」，给 product_relevance: "low"，只写一句话
+- 如果有关系（high/medium），你要输出**完整的、可直接执行的内容**，包括：
+  - 完整的短视频脚本（逐句话术 + 画面描述，不是概要）
+  - 完整的小红书图文（封面标题 + 每一页写什么 + 标签）
+  - 完整的长文大纲（每个章节的核心论点 + 论据 + 产品植入点）
+  - 完整的素材清单（具体数据、具体口播金句、具体封面文字）
+  - 每个平台的标题 2 个（直接能用，不是方向建议）
 
 你绝不做的事：
 - 不编造产品没有的功能来凑热点
-- 不在每个热点里都提产品名——有些热点用「行业视角」比「产品视角」更合适
-- 不写「可以结合XX」这种废话——要写就写具体怎么结合、具体说什么话"""
+- 不写「可以结合XX」「建议从XX角度」这种半成品——要写就写完整内容
+- 不用「深度分析」「情感共鸣」这种万金油词——每一句都要具体到能直接用"""
 
 PRODUCT_BRIEF_USER = """## 我的产品
 
@@ -238,18 +209,45 @@ PRODUCT_BRIEF_USER = """## 我的产品
 
 ## 你的任务
 
-先判断每个热点跟我的产品有没有「真实连接」：
-- **high**: 产品直接相关（用户群体重叠/解决同一痛点/行业直接相关）→ 深入做
-- **medium**: 有间接关系（可以从行业角度/用户场景角度切入）→ 选择性做
-- **low**: 没什么关系 → 简单标注，不硬蹭
+### 第一步：判断关联度
+- **high**: 产品直接相关（用户群体重叠/解决同一痛点/行业直接相关）→ 输出完整方案
+- **medium**: 有间接关系（可以从行业角度/用户场景角度切入）→ 输出完整方案
+- **low**: 没什么关系 → 只写 product_tie_in: "关联较弱，不建议硬蹭"，其他字段留空
 
-对 high/medium 的话题：
-1. **结合点**：产品和这个热点的真实关系是什么（不是「都跟XX有关」这种废话）
-2. **角度**（1-2个深入的）：产品在这个角度里自然出现，不是硬塞
-3. **大纲**：只写最合适的形式，产品出现要自然（不是每句话都提）
-4. **素材**：产品相关的真实数据 + 热点相关素材
-5. **标题**：每平台 2 个
-6. **风险**：这个结合有没有翻车风险
+### 第二步：对 high/medium 的话题，输出完整可执行方案
+
+每个话题必须包含以下**完整内容**（不是建议，是成品）：
+
+**角度**（1-2 个深入的）：
+- 角度名要具体到能当标题
+- description 要写清楚「第一步做什么、第二步做什么、产品怎么出现」
+
+**短视频脚本**（完整到能直接拍）：
+- hook: 开头第一句话的完整话术（15字内，能让人停下来）
+- beats: 4-6 个节拍，每个写完整的口播内容（每条 30-60 字）+ 画面描述
+- cta: 结尾引导语
+
+**小红书图文**（完整到能直接做图）：
+- cover_title: 封面大字（10字内，含 emoji）
+- slides: 6-8 张图，每张写清楚「大标题 + 正文内容 + 配图建议」
+- hashtags: 8-10 个标签
+
+**长文大纲**（完整到能直接写）：
+- title: 公众号标题
+- sections: 4-5 个章节，每章包含 heading + core_point（核心论点 2-3 句）+ evidence（论据/数据）+ product_mention（产品怎么自然出现，没有就写 null）
+
+**素材清单**（具体到能直接引用）：
+- data_points: 5-8 条，每条含具体数字事实 + 来源 + 用在哪个环节
+- sound_bites: 5-8 条口播金句（8-18字，朗朗上口）
+- screenshot_lines: 3-5 条封面/字幕文字（≤14字）
+- sources: 3-5 条信源（标题 + URL + 一句话要点）
+
+**标题**（每个平台 2 个，直接能用）：
+- douyin: 15字内
+- xiaohongshu: 含 emoji
+- gongzhonghao: 悬念感
+- zhihu: 问题式
+- bilibili: 口语化
 
 返回严格 JSON（不要 markdown 代码块）：
 
@@ -262,31 +260,62 @@ PRODUCT_BRIEF_USER = """## 我的产品
       "category": "科技",
       "platforms": ["微博"],
       "summary": "概要",
-      "product_relevance": "high/medium/low",
+      "product_relevance": "high",
       "brief": {{
-        "product_tie_in": "真实的结合点（low 的写「关联较弱，不建议硬蹭」）",
+        "product_tie_in": "产品与热点的真实连接（一句话说清楚）",
         "angles": [
           {{
-            "name": "具体角度",
-            "description": "怎么做，产品怎么自然出现",
-            "product_role": "产品的角色",
-            "best_platform": "平台",
+            "name": "具体角度名（能当标题）",
+            "description": "完整执行方案：第一步...第二步...产品出现在...",
+            "product_role": "产品在此内容中的角色",
+            "best_platform": "最适合平台",
             "appeal": "高/中/低"
           }}
         ],
         "outlines": {{
-          "short_video": {{"hook": "", "beats": [{{"content": "", "visual": ""}}], "cta": ""}},
-          "xiaohongshu": {{"cover_title": "", "slides": [], "hashtags": []}},
-          "article": {{"title": "", "sections": [{{"heading": "", "core_point": ""}}]}}
+          "short_video": {{
+            "hook": "完整的开头话术",
+            "beats": [
+              {{"content": "完整的口播内容（30-60字）", "visual": "画面描述"}},
+              {{"content": "...", "visual": "..."}}
+            ],
+            "cta": "结尾引导语"
+          }},
+          "xiaohongshu": {{
+            "cover_title": "封面大字 emoji",
+            "slides": [
+              {{"title": "第1页标题", "content": "正文内容", "image_note": "配图建议"}},
+              {{"title": "...", "content": "...", "image_note": "..."}}
+            ],
+            "hashtags": ["#标签1", "#标签2"]
+          }},
+          "article": {{
+            "title": "公众号标题",
+            "sections": [
+              {{"heading": "章节标题", "core_point": "核心论点2-3句", "evidence": "论据/数据", "product_mention": "产品植入点或null"}}
+            ]
+          }}
         }},
         "materials": {{
-          "data_points": [{{"fact": "", "source": "", "how_to_use": ""}}],
-          "sound_bites": [],
-          "sources": [{{"title": "", "url": "", "takeaway": ""}}]
+          "data_points": [{{"fact": "含数字的事实", "source": "来源", "how_to_use": "用在哪个环节"}}],
+          "sound_bites": ["8-18字口播金句"],
+          "screenshot_lines": ["≤14字封面/字幕文字"],
+          "sources": [{{"title": "报道标题", "url": "链接", "takeaway": "一句话要点"}}]
         }},
-        "titles": {{"douyin": [], "xiaohongshu": [], "gongzhonghao": [], "zhihu": [], "bilibili": []}},
-        "recommendation": {{"first_platform": "", "best_time": "", "trending_window": "", "platform_priority": []}},
-        "risk_notes": "风险提示"
+        "titles": {{
+          "douyin": ["标题1", "标题2"],
+          "xiaohongshu": ["标题1", "标题2"],
+          "gongzhonghao": ["标题1", "标题2"],
+          "zhihu": ["标题1", "标题2"],
+          "bilibili": ["标题1", "标题2"]
+        }},
+        "recommendation": {{
+          "first_platform": "首发平台",
+          "best_time": "最佳发布时间",
+          "trending_window": "窗口期",
+          "platform_priority": ["平台1", "平台2", "平台3"]
+        }},
+        "risk_notes": "风险提示（翻车风险、敏感点、法律风险）"
       }}
     }}
   ]
@@ -437,11 +466,12 @@ def main():
         trends = trends[:args.top]
 
     mode = "product x trend" if profile else "generic"
-    print(f"[content_brief] Mode: {mode} | {len(trends)} topics | {model}", file=sys.stderr)
+    effective_batch = 1 if profile and args.batch_size > 1 else args.batch_size
+    print(f"[content_brief] Mode: {mode} | {len(trends)} topics | batch={effective_batch} | {model}", file=sys.stderr)
     if profile:
         print(f"[content_brief] Product: {profile.get('name', 'Unknown')}", file=sys.stderr)
 
-    briefed = process_batch(trends, model, api_key, api_base or None, args.batch_size, profile)
+    briefed = process_batch(trends, model, api_key, api_base or None, effective_batch, profile)
 
     result = {"briefed_trends": briefed}
 

@@ -64,58 +64,33 @@
 
 ---
 
-## content_brief — Creative Brief Generation
+## content_brief — Creative Brief Generation (热点模式 / 轻量版)
+
+> **注意**：此模板用于**热点模式**（无产品）。产品模式的完整方案 prompt 内嵌在 `content_brief.py` 中。
 
 <!-- SECTION: content_brief START -->
 
 ### System Prompt
 
 ```
-你是一个顶级内容策划人。你的工作不是填模板，而是为每个话题找到「只有这个话题才能讲的独特故事」。
+你是一个资深内容策划人，擅长快速抓住热点的核心价值。
 
-核心原则：
-- 先吃透话题本身——核心矛盾是什么？普通人为什么该关心？
-- 角度要锋利——不要「深度分析」「情绪共鸣」这种万金油，要具体到能直接开拍的方案
-- 宁精勿滥——2个深入的好角度 > 5个泛泛的角度
-- 素材是颗粒——一条数据/一句口播/一个画面，不是章节大纲的改写
-- 不确定的标注「（需验证）」，不编造
+热点模式的目标是「快」和「准」——帮创作者在 30 秒内判断一个热点值不值得做、怎么切入。
+不需要完整的脚本和素材，只需要：洞察 + 角度 + 关键词。
 ```
 
 ### User Prompt Template
 
 ```
-为以下热点话题生成创作方案。每个话题先想清楚再写，不要套模板。
+为以下热点话题生成快速创作简报。每个话题只需要核心信息，不要写完整脚本。
 
 ## 每个话题输出
 
-### 1. 洞察（最重要，后面都从这里出发）
-- **核心矛盾**：这件事到底怎么回事，谁受益谁受损（2句话）
-- **为什么火**：触发点是什么
-- **创作者机会**：最值得做的方向（1-2句，具体说为什么）
-
-### 2. 角度（2-3个精选，每个要深入）
-- **角度名**：具体到能当标题（如「替你算了一笔账」而不是「算账体」）
-- **怎么做**：3-5句话讲清楚怎么开头、中间讲什么、怎么收
-- **为什么能火**：利用了什么传播机制
-- **最适合平台** + **吸引力（高/中/低）**
-
-### 3. 大纲（只写最适合的 1-2 种形式，写透）
-短视频：hook完整话术 + 3-4节拍（具体话+画面）+ CTA
-小红书：封面大字 + 6-8张图每张写什么 + 标签
-长文：标题 + 3-4章节（每章核心论点+论据）
-
-### 4. 素材（6-10条原子颗粒，拿来就能用）
-- data_points: `{"fact":"含数字的事实", "source":"来源", "how_to_use":"用在哪"}`
-- sound_bites: 8-18字口播短句
-- screenshot_lines: ≤14字封面/字幕文字
-- media_hooks: 画面描述
-- sources: `{"title":"报道标题", "url":"链接", "takeaway":"硬事实一句"}`
-
-### 5. 标题（每平台2个，标注策略）
-抖音(15字内) / 小红书(含emoji) / 公众号 / 知乎 / B站
-
-### 6. 发布建议
-首发平台+理由 / 最佳时间 / 窗口期 / 平台优先级
+1. **洞察**（2-3句话）：这件事的核心矛盾是什么，为什么火，创作者该从哪个方向切
+2. **角度**（1-2个精选）：角度名具体到能当标题 + 一句话说明怎么做 + 最适合平台
+3. **热词**（8-12个）：跟这个话题相关的热搜关键词、平台标签、SEO词
+4. **标题**（2个就够）：一个抖音/小红书风格，一个公众号/知乎风格
+5. **发布建议**：首发平台 + 窗口期
 
 ## JSON 格式
 
@@ -129,22 +104,25 @@
       "platforms": ["微博"],
       "summary": "概要",
       "brief": {
-        "insight": {"core": "", "why_hot": "", "opportunity": ""},
-        "angles": [{"name": "", "description": "", "why_works": "", "best_platform": "", "appeal": ""}],
-        "outlines": {
-          "short_video": {"hook": "", "beats": [{"content": "", "visual": ""}], "cta": ""},
-          "xiaohongshu": {"cover_title": "", "slides": [], "hashtags": []},
-          "article": {"title": "", "sections": [{"heading": "", "core_point": "", "evidence": ""}]}
+        "insight": "2-3句话的核心洞察",
+        "angles": [
+          {
+            "name": "具体角度名",
+            "how": "一句话说明怎么做",
+            "best_platform": "抖音",
+            "appeal": "高/中"
+          }
+        ],
+        "hot_keywords": ["关键词1", "关键词2", "#标签1"],
+        "titles": {
+          "short_form": "抖音/小红书风格标题",
+          "long_form": "公众号/知乎风格标题"
         },
-        "materials": {
-          "data_points": [{"fact": "", "source": "", "how_to_use": ""}],
-          "sound_bites": [],
-          "screenshot_lines": [],
-          "media_hooks": [],
-          "sources": [{"title": "", "url": "", "takeaway": ""}]
-        },
-        "titles": {"douyin": [], "xiaohongshu": [], "gongzhonghao": [], "zhihu": [], "bilibili": []},
-        "recommendation": {"first_platform": "", "best_time": "", "trending_window": "", "platform_priority": []}
+        "recommendation": {
+          "first_platform": "首发平台",
+          "trending_window": "窗口期",
+          "platform_priority": ["平台1", "平台2"]
+        }
       }
     }
   ]

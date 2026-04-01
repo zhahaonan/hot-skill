@@ -12,7 +12,7 @@ import time
 import random
 from datetime import datetime, timezone, timedelta
 from _common import (
-    base_argparser, handle_schema, read_json_input, write_json_output, fail
+    base_argparser, handle_schema, read_json_input, write_json_output, fail, retry_request
 )
 
 try:
@@ -118,7 +118,12 @@ def fetch_feed(feed_config: dict) -> list[dict]:
     max_items = feed_config.get("max_items", 20)
     max_age_days = feed_config.get("max_age_days", 3)
 
-    parsed = feedparser.parse(url)
+    parsed = retry_request(
+        lambda: feedparser.parse(url),
+        max_retries=2,
+        backoff=1.0,
+        on_fail=f"RSS feed {feed_config.get('name', url)} unreachable",
+    )
 
     if parsed.bozo and not parsed.entries:
         raise RuntimeError(f"Failed to parse feed: {parsed.bozo_exception}")

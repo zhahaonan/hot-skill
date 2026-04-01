@@ -93,35 +93,48 @@ def log(step: str, msg: str, level: str = "INFO"):
     print(f"[{ts}] [{level}] [{step}] {msg}", file=sys.stderr)
 
 
-def run_script(script_name: str, args: list[str], step_name: str) -> tuple[bool, str]:
-    """Run a Python script and return (success, output_path_or_error)."""
+def run_script(script_name: str, args: list[str], step_name: str,
+               max_retries: int = 1, timeout: int = 300) -> tuple[bool, str]:
+    """Run a Python script with optional retry. Returns (success, output_or_error)."""
     cmd = [PYTHON, str(SCRIPTS / script_name)] + args
-    log(step_name, f"Running: {script_name} {' '.join(args)}")
-    start = time.time()
 
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, timeout=300, cwd=str(SKILL_ROOT),
-        )
-        elapsed = time.time() - start
+    for attempt in range(max_retries):
+        if attempt > 0:
+            wait = 2 ** attempt
+            log(step_name, f"Retry {attempt}/{max_retries-1} in {wait}s...", "WARN")
+            time.sleep(wait)
 
-        stdout = result.stdout.decode("utf-8", errors="replace").strip() if result.stdout else ""
-        stderr = result.stderr.decode("utf-8", errors="replace").strip() if result.stderr else ""
+        log(step_name, f"Running: {script_name} {' '.join(args)}")
+        start = time.time()
 
-        if result.returncode != 0:
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, timeout=timeout, cwd=str(SKILL_ROOT),
+            )
+            elapsed = time.time() - start
+
+            stdout = result.stdout.decode("utf-8", errors="replace").strip() if result.stdout else ""
+            stderr = result.stderr.decode("utf-8", errors="replace").strip() if result.stderr else ""
+
+            if result.returncode == 0:
+                log(step_name, f"Done ({elapsed:.1f}s)")
+                return True, stdout
+
             err = stderr or stdout
             log(step_name, f"FAILED ({elapsed:.1f}s): {err[:200]}", "ERROR")
-            return False, err[:500]
+            if attempt == max_retries - 1:
+                return False, err[:500]
 
-        log(step_name, f"Done ({elapsed:.1f}s)")
-        return True, stdout
+        except subprocess.TimeoutExpired:
+            log(step_name, f"TIMEOUT ({timeout}s)", "ERROR")
+            if attempt == max_retries - 1:
+                return False, f"Timeout after {timeout}s"
+        except Exception as e:
+            log(step_name, f"Exception: {e}", "ERROR")
+            if attempt == max_retries - 1:
+                return False, str(e)
 
-    except subprocess.TimeoutExpired:
-        log(step_name, "TIMEOUT (300s)", "ERROR")
-        return False, "Timeout after 300s"
-    except Exception as e:
-        log(step_name, f"Exception: {e}", "ERROR")
-        return False, str(e)
+    return False, "All retries exhausted"
 
 
 def interactive_setup(config: dict) -> dict:
@@ -320,21 +333,28 @@ def main():
             return
 
     else:
-        # Full collection
+        # Full collection (with retry — network may flake)
         ok1, out1 = run_script("collect_hotlist.py",
-                               ["-o", hotlist_path, "-p", platforms], "collect_hotlist")
+                               ["-o", hotlist_path, "-p", platforms], "collect_hotlist",
+                               max_retries=2, timeout=180)
         steps.append({"step": "collect_hotlist", "status": "ok" if ok1 else "error"})
 
         rss_ok = True
         if collect_cfg.get("rss_enabled", True):
-            ok2, out2 = run_script("collect_rss.py", ["-o", rss_path], "collect_rss")
+            ok2, out2 = run_script("collect_rss.py", ["-o", rss_path], "collect_rss",
+                                   max_retries=2, timeout=120)
             steps.append({"step": "collect_rss", "status": "ok" if ok2 else "error"})
             rss_ok = ok2
 
         if not ok1:
-            log("main", "Hotlist collection failed, cannot continue", "ERROR")
-            _finish(steps, outputs, success=False)
-            return
+            # Degradation: if hotlist fails but RSS succeeded, try to continue with RSS data
+            if rss_ok and Path(rss_path).exists():
+                log("main", "Hotlist failed but RSS available — degrading to RSS-only mode", "WARN")
+                hotlist_path = rss_path
+            else:
+                log("main", "All collection failed, cannot continue", "ERROR")
+                _finish(steps, outputs, success=False)
+                return
 
         # Merge items
         log("merge", "Merging collected data")
@@ -356,26 +376,28 @@ def main():
         log("merge", f"Merged {len(all_items)} unique items")
         steps.append({"step": "merge", "status": "ok", "count": len(all_items)})
 
-        # trend_analyze
+        # trend_analyze (retry — AI may return bad JSON)
         trends_path = str(OUTPUT_DIR / f"{date}-trends.json")
-        ok, out = run_script("trend_analyze.py", ["-i", merged_path, "-o", trends_path], "analyze")
+        ok, out = run_script("trend_analyze.py", ["-i", merged_path, "-o", trends_path], "analyze",
+                             max_retries=2)
         steps.append({"step": "analyze", "status": "ok" if ok else "error"})
         if not ok:
             log("main", "trend_analyze failed, cannot continue", "ERROR")
             _finish(steps, outputs, success=False)
             return
 
-        # content_brief
+        # content_brief (retry — AI may return bad JSON)
         briefs_path = str(OUTPUT_DIR / f"{date}-briefs.json")
         brief_args = ["-i", trends_path, "-o", briefs_path, "--top", str(top_n), "--batch-size", str(batch_size)]
         if profile_path and Path(profile_path).exists():
             brief_args += ["--profile", profile_path]
-        ok, out = run_script("content_brief.py", brief_args, "brief")
+        ok, out = run_script("content_brief.py", brief_args, "brief",
+                             max_retries=2)
         steps.append({"step": "brief", "status": "ok" if ok else "error"})
         if not ok:
-            log("main", "content_brief failed, cannot continue", "ERROR")
-            _finish(steps, outputs, success=False)
-            return
+            # Degradation: brief failed but we still have trends — export trends directly
+            log("main", "content_brief failed — degrading to trends-only export", "WARN")
+            briefs_path = trends_path
 
     outputs["briefs"] = briefs_path
 
@@ -390,12 +412,15 @@ def main():
         _finish(steps, outputs, success=True)
         return
 
-    # ========== STEP 3: Exports ==========
+    # ========== STEP 3: Exports (each independent — one failure doesn't block others) ==========
+    export_ok = 0
+
     # Obsidian
     obsidian_args = ["-i", briefs_path, "--vault", vault_path]
     ok, out = run_script("export_obsidian.py", obsidian_args, "obsidian")
     steps.append({"step": "export_obsidian", "status": "ok" if ok else "error"})
     if ok:
+        export_ok += 1
         try:
             obsidian_result = json.loads(out)
             outputs["obsidian_dashboard"] = obsidian_result.get("dashboard", "")
@@ -410,6 +435,7 @@ def main():
     ok, out = run_script("export_excel.py", ["-i", briefs_path, "--xlsx", excel_path], "excel")
     steps.append({"step": "export_excel", "status": "ok" if ok else "error"})
     if ok:
+        export_ok += 1
         outputs["excel"] = excel_path
 
     # Mindmap (with cumulative graph support)
@@ -420,9 +446,15 @@ def main():
     ok, out = run_script("export_mindmap.py", mindmap_args, "mindmap")
     steps.append({"step": "export_mindmap", "status": "ok" if ok else "error"})
     if ok:
+        export_ok += 1
         outputs["mindmap"] = mindmap_path
 
-    _finish(steps, outputs, success=True)
+    if export_ok == 0:
+        log("main", "All exports failed", "ERROR")
+    elif export_ok < 3:
+        log("main", f"Partial export: {export_ok}/3 succeeded", "WARN")
+
+    _finish(steps, outputs, success=export_ok > 0)
 
 
 def _finish(steps: list, outputs: dict, success: bool):

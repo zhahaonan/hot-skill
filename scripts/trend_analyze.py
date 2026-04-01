@@ -12,13 +12,10 @@ import json
 from pathlib import Path
 from _common import (
     base_argparser, handle_schema, read_json_input, write_json_output,
-    fail, SKILL_ROOT
+    fail, SKILL_ROOT, parse_ai_json
 )
 
-try:
-    import litellm
-except ImportError:
-    fail("litellm not installed. Run: pip install -r requirements.txt")
+litellm = None  # lazy import — only needed for CLI mode
 
 SCHEMA = {
     "name": "trend_analyze",
@@ -131,7 +128,15 @@ def load_prompt_template() -> tuple[str, str]:
 
 
 def call_ai(system_prompt: str, user_prompt: str, model: str, api_key: str, api_base: str = None) -> str:
-    """Call AI model via litellm."""
+    """Call AI model via litellm. Only used in standalone CLI mode."""
+    global litellm
+    if litellm is None:
+        try:
+            import litellm as _litellm
+            litellm = _litellm
+        except ImportError:
+            fail("litellm not installed. Standalone CLI mode requires: pip install litellm\n"
+                 "As a Skill, Agent does the AI analysis — this script is not needed.")
     kwargs = {
         "model": model,
         "messages": [
@@ -151,16 +156,8 @@ def call_ai(system_prompt: str, user_prompt: str, model: str, api_key: str, api_
 
 
 def parse_ai_response(text: str) -> dict:
-    """Parse AI response, handling possible markdown code fences."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        lines = lines[1:]  # remove opening fence
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        cleaned = "\n".join(lines)
-
-    return json.loads(cleaned)
+    """Parse AI response using the robust shared parser."""
+    return parse_ai_json(text)
 
 
 def main():
