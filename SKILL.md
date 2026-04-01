@@ -1,6 +1,6 @@
 ---
 name: hot-creator
-version: "5.1.0"
+version: "5.2.0"
 description: 产品 x 热点内容策划工具 — 采集全网热点，结合你的产品生成完整创作方案
 user-invocable: true
 metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-creator", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
@@ -167,11 +167,13 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 5. **长文大纲** — 标题 + 每章节论点/论据/植入点
 6. **素材清单** — 数据点 + 口播金句 + 封面文字 + 信源URL
 7. **平台标题** — 抖音/小红书/公众号/知乎/B站各 2 个
-8. **发布建议** — 首发平台 + 最佳时间 + 热度窗口期
+8. **发布建议** — 首发平台 + 最佳时间 + 热度窗口期（**必须填写**，思维导图需要）
 
-### Step 4 — 必须执行全部 3 个导出（不可跳过）
+> **关键**：`brief.recommendation.first_platform` 和 `brief.angles` 必须填写，否则思维导图会显示空白。
 
-**这三个导出是用户最终需要的输出，必须全部执行，不能跳过任何一个。**
+### Step 4 — 必须执行全部 2 个导出（不可跳过）
+
+**这两个导出是用户最终需要的输出，必须全部执行，不能跳过任何一个。**
 
 用 Task 子智能体并行执行：
 
@@ -179,17 +181,13 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 # 1. Obsidian Markdown 笔记（用户在笔记软件中查看）
 python {baseDir}/scripts/export_obsidian.py -i output/briefs.json --vault .
 
-# 2. Excel 报表（用户在表格中筛选和分析）
-python {baseDir}/scripts/export_excel.py -i output/briefs.json --xlsx output/report.xlsx
-
-# 3. D3 力导向思维导图（用户在浏览器中可视化查看）
+# 2. D3 力导向思维导图（用户在浏览器中可视化查看）
 python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindmap.html
 ```
 
 **输出文件**：
 - `HotCreator/{date}/_Dashboard.md` — 每日概览
 - `HotCreator/{date}/Topics/*.md` — 各话题详细笔记
-- `output/report.xlsx` — Excel 报表（4 个 Sheet）
 - `output/mindmap.html` — 交互式关系图谱
 
 ### Step 5 — 告知用户结果
@@ -211,7 +209,6 @@ python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindm
 | **collect_hotlist** | 全网热榜+实时采集 | 子智能体执行 |
 | **collect_rss** | RSS 订阅采集 | 子智能体执行 |
 | **product_profile** | PDF/文档文本提取 | 子智能体执行 |
-| **export_excel** | Excel 报表导出 | 子智能体执行 |
 | **export_obsidian** | Obsidian .md 笔记导出 | 子智能体执行 |
 | **export_mindmap** | D3 力导向关系图谱导出 | 子智能体执行 |
 
@@ -232,7 +229,7 @@ python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindm
 2. **采集类脚本用 Task 子智能体执行**，只返回文件路径和摘要，不返回完整数据
 3. **中间 JSON 写 `output/`**，传路径不传内容
 4. **Agent 自己做 Step 2 和 Step 3 的 AI 分析**，参考 `reference/prompt-templates.md`
-5. **Step 4 的 3 个 export 脚本必须全部执行**，用子智能体并行
+5. **Step 4 的 2 个 export 脚本必须全部执行**，用子智能体并行
 6. 分析趋势时注意 `platform_updated_at` 和 `source_type` 字段判断时效性
 7. 产品画像从用户对话或 PDF 文本中提取，Agent 自己结构化
 8. web-access 是可选增强，没有也不影响核心流程

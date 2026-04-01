@@ -24,11 +24,10 @@ Read `SKILL.md` — it has the complete step-by-step execution flow with exact J
 
 **Step 2.5: Optional web enhancement** — if web-access skill available, get comments/reports for richer context.
 
-**Step 3: Create content plans** — Agent reads trends + product profile, generates FULL content plans (scripts, outlines, materials, titles) for top 8 topics → writes `output/briefs.json`
+**Step 3: Create content plans** — Agent reads trends + product profile, generates FULL content plans (scripts, outlines, materials, titles) for related topics → writes `output/briefs.json`
 
-**Step 4: Export ALL 3 formats** (MANDATORY, do not skip any):
+**Step 4: Export ALL 2 formats** (MANDATORY, do not skip any):
 - `export_obsidian.py` → .md files
-- `export_excel.py` → .xlsx report
 - `export_mindmap.py` → interactive HTML graph
 
 **Step 5: Tell user** — list generated file paths + summarize top 3 topics
@@ -37,10 +36,15 @@ Read `SKILL.md` — it has the complete step-by-step execution flow with exact J
 
 **The output must be COMPLETE**: full video scripts, full XHS slides, full article outlines, full material lists, platform-specific titles. Not summaries, not suggestions — ready-to-use content.
 
+**Critical for mindmap**:
+- `brief.recommendation.first_platform` must be filled
+- `brief.angles` must have at least one angle with `name`, `platform`, `appeal`
+- `summary` must be filled in trends.json
+
 ## Rules
 
 - **Step 0 must execute first** — no product info = no content plan
 - Agent does the AI analysis in Steps 2-3 (do NOT call any external AI scripts)
-- ALL 3 export scripts MUST be executed — user expects .md docs, .xlsx, and .html
+- BOTH export scripts MUST be executed — user expects .md docs and .html
 - Collect scripts run in Task subagents, return file paths only
 - Intermediate JSON → `output/`, pass paths not content

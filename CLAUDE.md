@@ -38,9 +38,8 @@ pip install -r requirements.txt
 
 **Step 3: 生成内容方案** — Agent 自己做，结合产品画像，输出 briefs.json
 
-**Step 4: 三个导出全部执行** — 子智能体并行
+**Step 4: 两个导出全部执行** — 子智能体并行
 - export_obsidian → .md 文档
-- export_excel → .xlsx 报表
 - export_mindmap → HTML 思维导图
 
 **Step 5: 告知用户结果**
@@ -50,7 +49,15 @@ pip install -r requirements.txt
 1. **Step 0 必须先执行** — 没有产品信息无法生成内容方案
 2. **Agent 自己做 Step 2/3 分析** — 不调用外部 AI 脚本
 3. **内容方案必须完整**：完整短视频脚本、完整小红书图文、完整长文大纲、完整素材清单、每平台标题
-4. **三个导出脚本必须全部执行，不可跳过**
+4. **两个导出脚本必须全部执行，不可跳过**
+
+## 思维导图数据完整性
+
+思维导图依赖 briefs.json 中的以下字段，必须填写：
+- `brief.recommendation.first_platform` — 首发平台
+- `brief.angles[].name` — 创作角度名称
+- `brief.angles[].platform` — 适合平台
+- `summary` — 话题概要
 
 ## 约定
 
