@@ -2,66 +2,11 @@
 
 **产品 x 热点内容策划助手** — AI Agent Skill for content creators.
 
-采集全网热点趋势，结合你的产品/品牌，生成完整的创作思路和素材。输出 Excel 报表、Obsidian 笔记、D3 关系图谱。
-
-## Architecture / 架构
-
-遵循 [Harness 工程](https://docs.anthropic.com/) 五维度设计：
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  SKILL.md (~80 行, 渐进式披露入口)                               │
-│  ├─ 触发条件 + 工具索引                                          │
-│  ├─ 编排选择器 → reference/orchestration.md                      │
-│  ├─ 上下文预算 → reference/context-budget.md                     │
-│  └─ 知识按需加载表 → reference/*.md + site-patterns/*.md         │
-├─────────────────────────────────────────────────────────────────┤
-│  15 原子工具 (scripts/)                                          │
-│  ├─ 采集层: collect_hotlist / collect_rss / collect_social       │
-│  ├─ 分析层: trend_analyze / content_brief / industry_insight     │
-│  ├─ 画像层: product_profile / monitor_competitor                 │
-│  ├─ 输出层: export_excel / export_obsidian / export_mindmap      │
-│  └─ 验证层: verify (对抗性验证，schema/边界/幂等/反幻觉)          │
-├─────────────────────────────────────────────────────────────────┤
-│  多智能体编排                                                     │
-│  ├─ Fan-out/Fan-in: 并行采集                                     │
-│  ├─ Pipeline: 分析 → 简报 → 输出                                 │
-│  ├─ Expert Pool: 产品/竞品/行业专项分析                           │
-│  ├─ Hierarchical: 完整情报全流程                                  │
-│  └─ Adversarial Verification: 对抗性质量保障                      │
-├─────────────────────────────────────────────────────────────────┤
-│  上下文管理                                                       │
-│  ├─ 子智能体隔离: 采集数据不进主上下文                             │
-│  ├─ 数据压缩: 流水线中间产物落盘                                  │
-│  └─ 知识延迟加载: reference 文件按需读取                           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Features / 特性
-
-- **Atomic & Composable** — 15 独立工具，JSON stdin/stdout，自由组合
-- **Self-Describing** — 每个工具支持 `--help` / `--schema` / `--version`
-- **Progressive Disclosure** — SKILL.md 只有 ~80 行，reference 按需加载
-- **Multi-Agent Ready** — 内置 Fan-out/Fan-in、Pipeline、Expert Pool 编排策略
-- **Context-Aware** — 三层压缩策略（子智能体隔离 + 数据压缩 + 知识延迟加载）
-- **Dual Mode** — Agent 原生模式（无需 AI API）+ 独立 CLI 模式
-- **Enrich-then-Brief** — 话题充实步骤大幅提升素材质量（真实数据、真实报道、真实链接）
-- **Full Creative Briefs** — 创作角度、大纲（视频/图文/长文）、标题矩阵、对标案例、发布策略
-- **Structured Output** — Excel (4 Sheet) + Obsidian (Topics 按类别 + Copywriting 按平台) + 力导向图谱
-- **Product Integration** — 产品画像 x 热点结合，竞品监控，行业洞察
-- **web-access Compatible** — 社媒采集委托 web-access skill，hot-creator 只做数据规范化
-- **Adversarial Verification** — 对抗性验证工具，边界值/幂等/反幻觉/Pipeline 完整性检查
-- **Model Tiering** — 采集用快模型、分析用中模型、验证用最强模型的分层策略
-- **Read-Write Separation** — 验证/探索/规划阶段只读，写权限限制在最小范围
+采集全网热点趋势，结合你的产品/品牌，生成完整的创作思路和素材（短视频脚本、小红书图文、长文大纲、素材清单、平台标题）。输出 Obsidian .md 笔记、Excel 报表、D3 交互式关系图谱。
 
 ## Quick Start / 快速开始
 
-### As AI Agent Skill（推荐，3 秒安装）
-
-**OpenClaw 小龙虾：**
-```bash
-openclaw skills add https://github.com/zhahaonan/hot-creator
-```
+### As AI Agent Skill（推荐）
 
 **Cursor / Claude Code / Cline / Windsurf / 其他 Agent 工具：**
 ```bash
@@ -71,109 +16,109 @@ pip install -r requirements.txt
 ```
 
 > 有 `uv` 的话更快：`uv pip install -r requirements.txt`
-> **Skill 模式不需要配置 AI API Key** — Agent 自己就是 AI。
+> **不需要配置 AI API Key** — Agent 自己就是 AI。
 
 装好后对 Agent 说：
 
 ```
-"帮我看看现在什么热点最火，生成一份内容创作简报"
+"我的产品是 XXX，帮我结合当下热点生成内容创作方案"
 ```
 
-Agent 自动读取 `SKILL.md`，严格按内置工作流执行：采集 → AI 分析 → 创作简报 → 多格式输出。
+Agent 自动执行：采集全网热点 → 分析趋势 → 结合你的产品生成完整创作方案 → 输出 .md + .xlsx + 思维导图。
 
 ### Standalone CLI（独立命令行）
 
 ```bash
-# 一键全流程
+# 一键全流程（会交互式问你的产品信息）
 python scripts/start_my_day.py
 
-# 或逐步执行
+# 或指定产品直接跑
+python scripts/start_my_day.py --no-interactive --product-text "我们是一个AI写作助手..."
+
+# 逐步执行
 python scripts/collect_hotlist.py --platforms weibo,douyin,zhihu -o output/hotlist.json
 python scripts/trend_analyze.py -i output/hotlist.json -o output/trends.json
-python scripts/content_brief.py -i output/trends.json --top 10 -o output/briefs.json
+python scripts/content_brief.py -i output/trends.json --profile profile.json --top 8 -o output/briefs.json
 python scripts/export_excel.py -i output/briefs.json --xlsx output/report.xlsx
+python scripts/export_obsidian.py -i output/briefs.json --vault .
+python scripts/export_mindmap.py -i output/briefs.json -o output/mindmap.html
 ```
 
-### 版本与更新
+> CLI 独立运行 AI 脚本（trend_analyze / content_brief）需要 `AI_API_KEY` 环境变量和 `pip install litellm`。
 
-- 版本号见仓库根目录 **`VERSION`**（与 `SKILL.md` frontmatter 一致）。
-- 跑一键流程时会**自动对比** GitHub 上的 `VERSION`（结果缓存在 `output/.version_check_cache`，约 24h），有新版本会在终端 **stderr** 提示 `git pull`。
-- 手动检查：`python scripts/check_update.py`（有更新时退出码为 1）。
-- 关闭检查：`HOT_CREATOR_SKIP_UPDATE_CHECK=1` 或 `python scripts/start_my_day.py --no-update-check`。
-- 自建 Fork：设置 `HOT_CREATOR_VERSION_URL`、`HOT_CREATOR_REPO_URL`。
+## What You Get / 输出内容
+
+每个热点话题生成**完整的、可直接执行的内容方案**：
+
+| 内容 | 说明 |
+|------|------|
+| 产品结合点 | 你的产品跟这个热点怎么关联 |
+| 创作角度 | 具体到能当标题，含完整执行步骤 |
+| 短视频脚本 | 逐句话术 + 画面描述 + CTA |
+| 小红书图文 | 封面标题 + 每页内容 + 标签 |
+| 长文大纲 | 章节 + 论据 + 产品植入点 |
+| 素材清单 | 数据点、口播金句、封面文字、信源 |
+| 平台标题 | 抖音/小红书/公众号/知乎/B站各 2 个 |
+| 发布建议 | 首发平台 + 最佳时间 + 窗口期 |
+
+输出格式：
+- **Obsidian .md 笔记** — 按类别和平台归类的 Markdown 文档
+- **Excel 报表** — 趋势总览 + 创作简报 + 素材库 + 标题矩阵 (4 Sheet)
+- **D3 关系图谱** — 交互式 HTML 力导向图，可视化话题关联
 
 ## Tools / 工具
 
-| Tool | Description | Deps | Mode |
-|------|-------------|------|------|
-| **collect_hotlist** | 全网热榜采集（公共 API） | requests | Core |
-| **collect_rss** | RSS 订阅采集 | feedparser | Core |
-| **collect_social** | 社媒数据规范化器（接收 web-access 抓取的数据） | — | Core |
-| **monitor_competitor** | 竞品数据规范化器（接收 web-access 抓取的数据） | — | Core |
-| **enrich_topics** | 话题充实：合并 WebSearch 结果到趋势数据 | — | Core |
-| **trend_analyze** | AI 趋势评分与分类 | litellm (可选) | CLI |
-| **content_brief** | AI 内容创作简报（支持产品模式） | litellm (可选) | CLI |
-| **product_profile** | 产品资料 → 结构化画像 | litellm (可选) | CLI |
-| **industry_insight** | 行业趋势洞察 | litellm (可选) | CLI |
-| **knowledge_base** | 累积知识库（追加/搜索/图谱） | — | Core |
-| **export_excel** | Excel 报表（4 Sheet） | openpyxl | Core |
-| **export_obsidian** | Obsidian（Topics 按类别 + Copywriting 按平台） | — | Core |
-| **export_mindmap** | 力导向关系图谱 | — | Core |
-| **verify** | 对抗性验证（5 套件：schema/boundary/pipeline/idempotency/anti-hallucination） | — | Core |
-| **start_my_day** | 一键编排器 | — | Core |
-
-> **Core** = `requirements.txt` 即可 · **CLI** = 需要 `AI_API_KEY` 环境变量
-> 作为 Skill 时，CLI 模式的工具由 Agent 自身完成 AI 分析，不需要 litellm
+| Tool | Description | Deps |
+|------|-------------|------|
+| **collect_hotlist** | 全网热榜采集（10+ 平台，内置 retry） | requests |
+| **collect_rss** | RSS 订阅采集 | feedparser |
+| **collect_social** | 社媒数据规范化器 | — |
+| **enrich_topics** | 话题充实（合并 WebSearch 结果） | — |
+| **trend_analyze** | AI 趋势评分与分类 | litellm (可选) |
+| **content_brief** | 产品 x 热点完整内容方案 | litellm (可选) |
+| **product_profile** | 产品资料 → 结构化画像 | litellm (可选) |
+| **industry_insight** | 行业趋势洞察 | litellm (可选) |
+| **knowledge_base** | 累积知识库（追加/搜索/图谱） | — |
+| **export_excel** | Excel 报表 (4 Sheet) | openpyxl |
+| **export_obsidian** | Obsidian .md 笔记 | — |
+| **export_mindmap** | D3 力导向关系图谱 (HTML) | — |
+| **verify** | 对抗性验证（5 套件） | — |
+| **start_my_day** | 一键编排器（内置 retry + 降级） | — |
 
 ```bash
-# Tool self-description
 python scripts/collect_hotlist.py --help    # Usage
 python scripts/collect_hotlist.py --schema  # JSON Schema
 python scripts/collect_hotlist.py --version # Version
 ```
 
-## Harness Design Principles / 设计原则
+## Self-Healing / 自修复
 
-### 1. Implement Tools — 工具原子性
-
-每个脚本只做一件事。`--schema` 输出完整的 input/output/examples/errors 合约。工具之间通过 JSON 管道组合。
-
-### 2. Curate Knowledge — 知识渐进式披露
-
-SKILL.md 是唯一的入口，只有 ~80 行。8 个 reference 文件按需加载，避免浪费上下文。
-
-### 3. Manage Context — 三层上下文管理
-
-- **子智能体隔离**：采集数据在子智能体中完成，不进主上下文
-- **数据压缩**：中间产物落盘（`output/`），只传递文件路径
-- **知识延迟加载**：prompt-templates 分段锚点，只读需要的 section
-
-### 4. Coordinate Agents — 多智能体编排
-
-支持 7 种架构模式：Fan-out/Fan-in、Pipeline、Expert Pool、Producer-Reviewer、Supervisor、Hierarchical Delegation、Adversarial Verification。
-
-模型分层策略：采集用 fast（Haiku 级），分析用 default（Sonnet 级），验证用 strong（Opus 级）。
-读写分离：验证/探索/规划阶段只读，写权限限制在采集和导出阶段。
-
-### 5. Error Contracts — 结构化错误
-
-每个工具的 SCHEMA 包含 `errors` 字段，定义可能的错误类型和解决方案。`_common.py` 提供 `structured_error()` 和 `_error_hint()` 自动生成可操作的错误提示。
+- 单平台采集超时 → 内置 3 次 retry，指数退避
+- AI 返回非法 JSON → 自动剥离 markdown fence + 修复截断
+- Pipeline 采集全失败 → 降级到 RSS-only
+- Pipeline brief 失败 → 降级到 trends-only 导出
+- 单个 export 失败 → 不影响其他 export
+- 依赖未安装 → 自动 pip install
 
 ## Supported Platforms / 支持平台
 
-**Hotlist (API):** 微博, 抖音, 知乎, 百度, 头条, B站, 36氪, IT之家, 澎湃新闻, 财联社
+**热榜 (API):** 微博, 抖音, 知乎, 百度, 头条, B站, 36氪, IT之家, 澎湃新闻, 财联社
 
-**Social (via web-access):** 小红书, 抖音实时, 微博上升趋势 — 社媒浏览由 **[web-access](https://github.com/eze-is/web-access)** skill 负责，hot-creator 只做数据规范化。
+**RSS:** 36氪, Hacker News, 少数派（可配置自定义 feed）
 
-**RSS:** Configurable — defaults include 36氪, Hacker News, 少数派
+## Version / 版本
+
+- 版本号见 `VERSION` 文件
+- `start_my_day` 自动对比 GitHub 上的版本（缓存 24h）
+- 手动检查：`python scripts/check_update.py`
+- 关闭检查：`HOT_CREATOR_SKIP_UPDATE_CHECK=1`
 
 ## Requirements / 依赖
 
 - Python >= 3.10
-- web-access skill (optional, for social media browsing)
+- Core: `requests`, `feedparser`, `openpyxl`, `pytz`, `pyyaml`
+- CLI AI 脚本（可选）: `litellm`
 
-## License / 许可
+## License
 
-MIT — See [LICENSE](LICENSE) for details.
-
-Social media browsing via [web-access](https://github.com/eze-is/web-access) skill (MIT License).
+MIT
