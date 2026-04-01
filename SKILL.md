@@ -1,6 +1,6 @@
 ---
 name: hot-creator
-version: "5.4.0"
+version: "5.5.0"
 description: 产品 x 热点内容策划工具 — 采集全网热点，结合你的产品生成完整创作方案
 user-invocable: true
 metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-creator", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
@@ -129,18 +129,35 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 }
 ```
 
-### Step 2.5 — 可选：Web 增强信息获取
+### Step 2.5 — 强烈建议：Web 增强获取全文
 
-**这是可选步骤，用于提升内容质量。**
+**这一步对内容质量至关重要，强烈建议执行。**
 
-如果 Agent 有 web-access skill（CDP 能力），可以选择性地：
-- 获取小红书热门评论 → 了解用户真实反馈、痛点
-- 获取微博评论 → 了解舆论风向、争议点
-- 搜索话题相关报道 → 补充真实数据和信源
+热点采集通常只有标题和摘要，缺少完整上下文。Agent 应该：
 
-获取的信息直接写入 trends.json 的 context 字段即可。
+1. **获取热点原文**（优先级最高）：
+   - 用 WebFetch 访问热点 URL，获取完整报道内容
+   - 如果 URL 不可访问，用 WebSearch 搜索话题，找到可访问的信源
+   - 至少获取 Top 5 热点的全文内容
 
-**没有 web-access 也不影响核心流程**，Agent 可以用 WebSearch 替代或直接基于采集数据分析。
+2. **获取社交反馈**（如果有 web-access）：
+   - 小红书热门评论 → 用户真实反馈、痛点
+   - 微博评论 → 舆论风向、争议点
+
+3. **获取的信息写入 trends.json**：
+   ```json
+   {
+     "topic": "话题名",
+     "context": {
+       "full_article": "从原文获取的完整内容",
+       "key_facts": ["事实1", "事实2"],
+       "social_sentiment": "舆论倾向",
+       "source_url": "原文链接"
+     }
+   }
+   ```
+
+**没有全文会导致**：内容方案缺乏真实细节，AI 只能泛泛而谈。
 
 ### Step 3 — Agent 生成完整创作方案
 
@@ -239,6 +256,53 @@ python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindm
 ### Step 5 — 告知用户结果
 
 告诉用户生成了哪些文件及路径，简要总结 top 3 话题的创作方向。
+
+## 模型漂移自检（每步执行）
+
+Agent 在每个 Step 执行后，必须自检是否符合预期：
+
+| Step | 自检项 | 不符合时的处理 |
+|------|--------|---------------|
+| Step 0 | 画像是否包含 name, type, target_audience, usps | 重新提取缺失字段 |
+| Step 1 | 采集数量是否 ≥ 50 条 | 尝试更多平台或检查网络 |
+| Step 2 | trends 数量是否 ≥ 10 条，每条是否有 summary, hot_window | 补充缺失字段 |
+| Step 2.5 | Top 5 热点是否获取了全文或 context | 用 WebFetch/WebSearch 补充 |
+| Step 3 | 每个方案 12 个字段是否全部填写 | 补充空白字段 |
+| Step 4 | 两个导出是否都成功 | 检查错误日志重试 |
+
+**自检时机**：每完成一个 Step，立即检查输出文件，确认无误后再进入下一步。
+
+## 用户检查与修正
+
+用户可以在以下检查点查看和修正问题：
+
+### 检查点 1：画像确认（Step 0 后）
+- **文件**：无（Agent 内部状态）
+- **检查方式**：Agent 应该向用户展示提取的画像，用户确认是否正确
+- **修正方式**：用户补充或纠正信息，Agent 重新提取
+
+### 检查点 2：热点列表（Step 2 后）
+- **文件**：`output/trends.json`
+- **检查方式**：用户打开文件查看分析的热点是否合理
+- **修正方式**：告诉 Agent "第 X 个话题不准确，应该是..."，Agent 修正 trends.json
+
+### 检查点 3：内容方案（Step 3 后）
+- **文件**：`output/briefs.json`
+- **检查方式**：用户查看某个话题的内容方案是否完整、是否真正结合产品
+- **修正方式**：告诉 Agent "话题 X 的产品结合点不对，应该从 XX 角度..."，Agent 修正 briefs.json
+
+### 检查点 4：导出结果（Step 4 后）
+- **文件**：`HotCreator/{date}/` 和 `output/mindmap.html`
+- **检查方式**：用户打开 MD 文件或 HTML 查看最终输出
+- **修正方式**：告诉 Agent "内容不够具体 / 某话题缺失"，Agent 回到 Step 3 修正
+
+### 快速修正命令
+
+用户可以直接要求 Agent：
+- "重新分析第 X 个话题"
+- "补充话题 X 的短视频脚本"
+- "这个产品结合点不对，换成 XX 角度"
+- "Top 3 热点没有获取全文，去获取一下"
 
 ## 支持平台
 
