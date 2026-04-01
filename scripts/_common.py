@@ -1,7 +1,6 @@
 """
 hot-creator shared utilities.
 JSON I/O, time helpers, platform mapping, error handling, CLI framework.
-Input validation, structured errors, version reporting.
 """
 
 import sys
@@ -117,21 +116,9 @@ def warn_if_newer_upstream(cache_hours: int = 24) -> None:
             file=sys.stderr,
         )
 
-# Auto-load .env file if present (for standalone CLI use)
-_env_file = SKILL_ROOT / ".env"
-if _env_file.exists():
-    for line in _env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" in line:
-            key, _, value = line.partition("=")
-            key, value = key.strip(), value.strip()
-            if key and key not in os.environ:
-                os.environ[key] = value
 
 # --- Platform registry ---
-# type: "hotlist" = 热门榜单（积累热度）, "realtime" = 实时新闻流（刚发生的）, "social" = 社媒（需 web-access）
+# type: "hotlist" = 热门榜单（积累热度）, "realtime" = 实时新闻流（刚发生的）
 # column: 便于按领域筛选
 
 PLATFORMS = {
@@ -173,10 +160,6 @@ PLATFORMS = {
     "gelonghui":           {"name": "格隆汇",       "type": "realtime", "column": "finance"},
     "jin10":               {"name": "金十数据",     "type": "realtime", "column": "finance"},
     "fastbull-express":    {"name": "法布财经快讯", "type": "realtime", "column": "finance"},
-    # ── 社媒（需 web-access skill）──
-    "xiaohongshu":         {"name": "小红书",       "type": "social",   "column": "china"},
-    "douyin_realtime":     {"name": "抖音实时",     "type": "social",   "column": "china"},
-    "weibo_rising":        {"name": "微博上升",     "type": "social",   "column": "china"},
 }
 
 NEWSNOW_API = "https://newsnow.busiyi.world/api/s"
@@ -189,7 +172,7 @@ def platform_name(platform_id: str) -> str:
     return entry["name"] if entry else platform_id
 
 
-# Brief.materials: human-readable category names + atomic lines (not 一、二、三 outline blobs)
+# Brief.materials: human-readable category names
 MATERIAL_CATEGORY_LABELS = {
     "data_points": "核心数据",
     "quotes": "引用金句",
@@ -453,72 +436,15 @@ def structured_error(tool_name: str, error: Exception, context: str = "") -> dic
     }
 
 
-def parse_ai_json(text: str) -> dict | list:
-    """
-    Robustly parse AI-generated JSON: strips markdown fences, recovers truncated
-    arrays/objects, and handles common AI output quirks.
-    """
-    import re
-    cleaned = text.strip()
-
-    fence = re.search(r"```(?:json)?\s*\n(.*?)```", cleaned, re.DOTALL)
-    if fence:
-        cleaned = fence.group(1).strip()
-    elif cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
-
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        pass
-
-    for suffix in ["]}", "}", "]", '"}', '"}]', '"}]}']:
-        try:
-            return json.loads(cleaned + suffix)
-        except json.JSONDecodeError:
-            continue
-
-    bracket = cleaned.find("[")
-    brace = cleaned.find("{")
-    if bracket >= 0 and (brace < 0 or bracket < brace):
-        start = bracket
-    elif brace >= 0:
-        start = brace
-    else:
-        raise json.JSONDecodeError("No JSON structure found in AI response", cleaned, 0)
-
-    fragment = cleaned[start:]
-    try:
-        return json.loads(fragment)
-    except json.JSONDecodeError:
-        for suffix in ["]}", "}", "]", '"}', '"}]', '"}]}']:
-            try:
-                return json.loads(fragment + suffix)
-            except json.JSONDecodeError:
-                continue
-
-    raise json.JSONDecodeError("Could not parse AI response as JSON", cleaned, 0)
-
-
 def _error_hint(message: str) -> str:
     """Generate actionable hint based on common error patterns."""
     msg = message.lower()
-    if "api_key" in msg or "api key" in msg:
-        return "Set AI_API_KEY in .env or pass --api-key. Not needed in Agent-native mode."
-    if "litellm" in msg:
-        return "Run: pip install litellm"
     if "feedparser" in msg:
         return "Run: pip install feedparser"
     if "openpyxl" in msg:
         return "Run: pip install openpyxl"
-    if "cdp" in msg or "chrome" in msg:
-        return "Browser operations are handled by the web-access skill, not hot-creator."
+    if "pypdf" in msg:
+        return "Run: pip install pypdf"
     if "timeout" in msg:
         return "Network timeout. Check connectivity or try a single platform first."
-    if "json" in msg and ("parse" in msg or "decode" in msg):
-        return "AI response was not valid JSON. Try again or switch model."
     return ""

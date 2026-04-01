@@ -6,9 +6,6 @@
 
 ## Quick Start / 快速开始
 
-### As AI Agent Skill（推荐）
-
-**Cursor / Claude Code / Cline / Windsurf / 其他 Agent 工具：**
 ```bash
 git clone https://github.com/zhahaonan/hot-creator.git
 cd hot-creator
@@ -16,8 +13,7 @@ pip install -r requirements.txt
 ```
 
 > 有 `uv` 的话更快：`uv pip install -r requirements.txt`
-> **Skill 模式不需要配置 AI API Key** — Agent 自己就是 AI。  
-> **独立 CLI** 若跑 `product_profile` / `trend_analyze` / `content_brief` 等需 `AI_API_KEY`；`--product-file` 走 `product_profile` 解析 PDF 同样需要。
+> **不需要配置 AI API Key** — Agent 自己就是 AI，自己做分析。
 
 装好后对 Agent 说：
 
@@ -26,32 +22,6 @@ pip install -r requirements.txt
 ```
 
 Agent 自动执行：采集全网热点 → 分析趋势 → 结合你的产品生成完整创作方案 → 输出 .md + .xlsx + 思维导图。
-
-### Standalone CLI（独立命令行）
-
-```bash
-# 一键全流程（会交互式问你的产品信息）
-python scripts/start_my_day.py
-
-# 或指定产品直接跑
-python scripts/start_my_day.py --no-interactive --product-text "我们是一个AI写作助手..."
-
-# 或上传/指定本地产品介绍 PDF（需 AI_API_KEY，会先解析再生成画像）
-python scripts/start_my_day.py --no-interactive --product-file ./docs/product-intro.pdf
-
-# 仅抽取 PDF/文档为纯文本（不需 API，适合先给 Agent 读）
-python scripts/product_profile.py --file ./docs/product-intro.pdf --extract-only -o output/product-raw.txt
-
-# 逐步执行
-python scripts/collect_hotlist.py --platforms weibo,douyin,zhihu -o output/hotlist.json
-python scripts/trend_analyze.py -i output/hotlist.json -o output/trends.json
-python scripts/content_brief.py -i output/trends.json --profile profile.json --top 8 -o output/briefs.json
-python scripts/export_excel.py -i output/briefs.json --xlsx output/report.xlsx
-python scripts/export_obsidian.py -i output/briefs.json --vault .
-python scripts/export_mindmap.py -i output/briefs.json -o output/mindmap.html
-```
-
-> CLI 独立运行 AI 脚本（trend_analyze / content_brief）需要 `AI_API_KEY` 环境变量和 `pip install litellm`。
 
 ## What You Get / 输出内容
 
@@ -73,24 +43,18 @@ python scripts/export_mindmap.py -i output/briefs.json -o output/mindmap.html
 - **Excel 报表** — 趋势总览 + 创作简报 + 素材库 + 标题矩阵 (4 Sheet)
 - **D3 关系图谱** — 交互式 HTML 力导向图，可视化话题关联
 
-## Tools / 工具
+## 工具脚本
 
-| Tool | Description | Deps |
-|------|-------------|------|
-| **collect_hotlist** | 全网热榜采集（10+ 平台，内置 retry） | requests |
-| **collect_rss** | RSS 订阅采集 | feedparser |
-| **collect_social** | 社媒数据规范化器 | — |
-| **enrich_topics** | 话题充实（合并 WebSearch 结果） | — |
-| **trend_analyze** | AI 趋势评分与分类 | litellm (可选) |
-| **content_brief** | 产品 x 热点完整内容方案 | litellm (可选) |
-| **product_profile** | 产品资料 → 结构化画像 | litellm (可选) |
-| **industry_insight** | 行业趋势洞察 | litellm (可选) |
-| **knowledge_base** | 累积知识库（追加/搜索/图谱） | — |
-| **export_excel** | Excel 报表 (4 Sheet) | openpyxl |
-| **export_obsidian** | Obsidian .md 笔记 | — |
-| **export_mindmap** | D3 力导向关系图谱 (HTML) | — |
-| **verify** | 对抗性验证（5 套件） | — |
-| **start_my_day** | 一键编排器（内置 retry + 降级） | — |
+| 脚本 | 用途 | 调用方式 |
+|------|------|----------|
+| **collect_hotlist** | 全网热榜采集（29 平台） | 子智能体执行 |
+| **collect_rss** | RSS 订阅采集 | 子智能体执行 |
+| **enrich_topics** | 合并 WebSearch 结果 | Agent 可选调用 |
+| **product_profile** | PDF/文档文本提取 | 子智能体执行 |
+| **export_excel** | Excel 报表导出 | 子智能体执行 |
+| **export_obsidian** | Obsidian .md 导出 | 子智能体执行 |
+| **export_mindmap** | D3 关系图谱导出 | 子智能体执行 |
+| **knowledge_base** | 累积知识库（可选） | Agent 可选调用 |
 
 ```bash
 python scripts/collect_hotlist.py --help    # Usage
@@ -98,37 +62,32 @@ python scripts/collect_hotlist.py --schema  # JSON Schema
 python scripts/collect_hotlist.py --version # Version
 ```
 
+## Harness 模式
+
+此 Skill 采用 Agent Harness 架构：
+
+1. **采集脚本** — 用 Task 子智能体执行，只返回文件路径，大数据不进主上下文
+2. **Agent 分析** — Agent 自己做趋势分析和内容生成，参考 `reference/prompt-templates.md`
+3. **导出脚本** — 子智能体并行执行 3 个导出
+
 ## Self-Healing / 自修复
 
 - 单平台采集超时 → 内置 3 次 retry，指数退避
-- AI 返回非法 JSON → 自动剥离 markdown fence + 修复截断
-- Pipeline 采集全失败 → 降级到 RSS-only
-- Pipeline brief 失败 → 降级到 trends-only 导出
 - 单个 export 失败 → 不影响其他 export
 - 依赖未安装 → 自动 pip install
 
 ## Supported Platforms / 支持平台
 
-**热门榜单 (40+ 源):** 微博, 抖音, 知乎, 百度热搜, 今日头条, B站, 澎湃新闻, 虎扑, 百度贴吧, 酷安, 豆瓣, 凤凰网, 牛客, 腾讯新闻, 腾讯视频, 爱奇艺, 虫部落, 36氪人气榜, 华尔街见闻, 财联社热门, 雪球, Hacker News, Product Hunt, GitHub Trending, 少数派, 稀土掘金, Freebuf, Steam
+**热门榜单 (29 源):** 微博, 抖音, 知乎, 百度热搜, 今日头条, B站, 澎湃新闻, 虎扑, 百度贴吧, 酷安, 豆瓣, 凤凰网, 牛客, 腾讯新闻, 腾讯视频, 爱奇艺, 虫部落, 36氪人气榜, 华尔街见闻, 财联社热门, 雪球, Hacker News, Product Hunt, GitHub Trending, 少数派, 稀土掘金, Freebuf, Steam
 
-**实时新闻流:** 联合早报, 华尔街见闻快讯, 36氪快讯, 财联社电报, IT之家, 格隆汇, 金十数据, 法布财经
+**实时新闻流 (8 源):** 联合早报, 华尔街见闻快讯, 36氪快讯, 财联社电报, IT之家, 格隆汇, 金十数据, 法布财经
 
-**RSS:** 36氪, Hacker News, 少数派（可配置自定义 feed）
-
-> 数据源来自 [NewsNow](https://newsnow.busiyi.world/)，采集结果除标题外还会尽量保留：**`snippet`**（如知乎 `hover` 长摘要）、**`published_at`**（如联合早报 `pubDate`、快讯里的毫秒时间）、**`url` / `mobile_url`**、**`heat`**。若某平台 API 只给标题，则 `snippet` 为空——需正文时请用 `url` 打开或配合 `enrich_topics` / Web 抓取。
-
-## Version / 版本
-
-- 版本号见 `VERSION` 文件
-- `start_my_day` 自动对比 GitHub 上的版本（缓存 24h）
-- 手动检查：`python scripts/check_update.py`
-- 关闭检查：`HOT_CREATOR_SKIP_UPDATE_CHECK=1`
+> 数据源来自 [NewsNow](https://newsnow.busiyi.world/)
 
 ## Requirements / 依赖
 
 - Python >= 3.10
-- Core: `requests`, `feedparser`, `openpyxl`, `pytz`, `pyyaml`
-- CLI AI 脚本（可选）: `litellm`
+- `requests`, `feedparser`, `openpyxl`, `pytz`, `pyyaml`, `pypdf`
 
 ## License
 

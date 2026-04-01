@@ -1,4 +1,4 @@
-# hot-creator 配置文件
+# hot-creator 配置文件示例
 # 复制为 config.yaml 并按需修改
 
 # Obsidian 笔记库路径（相对于项目根目录或绝对路径）
@@ -24,39 +24,12 @@ content_domains:
 collect:
   hotlist_platforms: ["weibo", "douyin", "zhihu", "baidu"]
   rss_enabled: true
-  social_enabled: false   # 需要 CDP 环境，默认关闭
 
 # 分析配置
 analyze:
-  top_n: 8                # content_brief 处理的话题数上限
-  batch_size: 2           # content_brief 每批处理数
+  top_n: 8                # 生成内容简报的话题数上限
 
 # 知识图谱配置
 graph:
   rolling_days: 7         # 滚动窗口天数
   cumulative: true        # 是否启用全量累积
-
-# 产品配置（可选 — 启用后 start_my_day 自动进入产品×热点模式）
-# product:
-#   default_profile: "output/my-product-profile.json"  # 预生成的画像文件路径
-#   auto_insight: true                                   # 是否自动跑 industry_insight
-
-# AI 配置（仅 CLI 模式需要，Agent 模式忽略）
-# ai:
-#   api_key: "sk-your-key"
-#   model: "deepseek/deepseek-chat"
-#   api_base: "https://api.deepseek.com/v1"
-
-# 模型分层策略 — 根据任务复杂度选择不同能力级别的模型
-# 探索/采集用快模型 → 分析/规划用中模型 → 验证用最强模型
-# Agent 框架层面由 Agent 调度（如 Cursor Task 的 model 参数）
-# model_tiers:
-#   explore: "fast"      # 采集、文件搜索、快速判断（Haiku 级）
-#   analyze: "default"   # 趋势分析、内容简报生成（Sonnet 级）
-#   verify:  "strong"    # 对抗性验证、质量审核（Opus 级）
-
-# 验证配置
-# verify:
-#   run_after_brief: true              # content_brief 后自动运行 verify
-#   suites: ["schema", "anti-hallucination"]  # 默认跑哪些检查套件
-#   fail_blocks_export: false          # 验证失败是否阻止导出
