@@ -1,5 +1,7 @@
 # CDP Proxy API Reference
 
+> **对齐对象**：本仓库的 CDP 层（`scripts/cdp/proxy.mjs`、`check.mjs`）在实现与授权上源自 **[web-access](https://github.com/eze-is/web-access)**（一泽 Eze，MIT）。Agent 侧若另有 **web-yunwei** 等 skill，与 hot-creator 内置 CDP **不是同一套**；小红书/抖音等采集请以 **本文件 API + `collect_social.py`** 为准，不要混用其它 skill 的 CDP 约定。
+
 ## Basics
 
 - Address: `http://localhost:3456` (configurable via `CDP_PROXY_PORT` env var)
@@ -21,10 +23,19 @@ List all open page tabs. Returns array with `targetId`, `title`, `url`.
 curl -s http://localhost:3456/targets
 ```
 
-### GET /new?url=URL
-Create new background tab, waits for page load. Returns `{ targetId }`.
+### GET /new?url=URL&waitFor=SELECTOR&waitTimeout=MS
+Create new background tab, waits for `document.complete`, then optionally **waits until a CSS selector exists** (SPA 如小红书).
+Returns `{ targetId }` or `{ targetId, waitFor: { ok, waitedMs } }`.
 ```bash
-curl -s "http://localhost:3456/new?url=https://example.com"
+curl -s "http://localhost:3456/new?url=https://www.xiaohongshu.com/explore"
+curl -s "http://localhost:3456/new?url=https://www.xiaohongshu.com/explore&waitFor=input%5Bplaceholder*%3D%22%E6%90%9C%E7%B4%A2%22%5D&waitTimeout=45000"
+```
+
+### GET /wait?target=ID&selector=SELECTOR&timeout=MS
+Poll until `document.querySelector(selector)` is truthy. Use after SPA navigation / 搜索提交。
+超时返回 HTTP 408，`{ ok: false, error: "timeout" }`。
+```bash
+curl -s "http://localhost:3456/wait?target=TARGET_ID&selector=a%5Bhref*%3D%22%2Fexplore%2F%22%5D&timeout=25000"
 ```
 
 ### GET /close?target=ID

@@ -12,6 +12,9 @@ Step 1 (parallel):
   python scripts/collect_hotlist.py --platforms weibo,douyin,zhihu,baidu -o hotlist.json
   python scripts/collect_rss.py -o rss.json
   python scripts/collect_social.py --targets xiaohongshu,weibo_rising -o social.json
+  # 小红书站内关键词（CDP，勿用 WebSearch 替代）:
+  # node scripts/cdp/check.mjs
+  # python scripts/collect_social.py -t xiaohongshu -q 露营装备 -o xhs-search.json
 
 Step 2: Merge outputs
   Combine items arrays from hotlist.json + rss.json + social.json into merged.json

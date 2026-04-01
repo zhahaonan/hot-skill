@@ -85,9 +85,13 @@ All collect tools output items in this format:
 **Input:**
 ```json
 {
-  "targets": ["xiaohongshu", "douyin", "weibo_rising"]
+  "targets": ["xiaohongshu", "douyin", "weibo_rising"],
+  "xiaohongshu_search": "可选 — 小红书站内关键词；在发现页搜索框输入并回车，勿直接打开 search_result URL",
+  "search_query": "同上别名"
 }
 ```
+
+**CDP：** 需 `node scripts/cdp/check.mjs`；代理支持 `GET /new?waitFor=` 与 `GET /wait` 等待 SPA 渲染（见 `reference/cdp-api.md`）。
 
 **Output:**
 ```json

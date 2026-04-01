@@ -22,6 +22,8 @@ cp config.example.yaml config.yaml
 
 环境变量：`AI_API_KEY`（必需）、`AI_MODEL`（可选，默认 deepseek/deepseek-chat）
 
+版本更新：`VERSION` 与 GitHub 比对由 `start_my_day` 自动提示；`python scripts/check_update.py` 手动检查；`HOT_CREATOR_SKIP_UPDATE_CHECK=1` 关闭。
+
 ## 入口
 
 读取 `SKILL.md` — 含工具索引、触发条件、标准工作流。

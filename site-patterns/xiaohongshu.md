@@ -41,8 +41,20 @@ updated: 2026-03-31
 - 从 DOM 中提取的完整 URL（含 xsec_token）比手动构造可靠
 - 在新 tab 中打开话题链接获取详情
 
+## 站内搜索（推荐）
+
+不要用浏览器直接打开 `search_result` URL。应：
+
+1. `collect_social` 打开 `https://www.xiaohongshu.com/explore`
+2. CDP `/new` 带 `waitFor` 等到搜索框出现（SPA 渲染完成）
+3. stdin JSON 传 `xiaohongshu_search` 或 `search_query`，脚本在页内输入关键词并回车
+4. `/wait` 等到结果区链接出现再 `eval` 抽标题
+
+CLI：`python scripts/collect_social.py -t xiaohongshu -q "关键词" -o output/xhs.json`
+
 ## 已知陷阱
 
 - (2026-03) 手动构造 `/search_result?keyword=xxx` URL 会被 xsec_token 验证拦截
 - (2026-03) 密集请求（短时间内打开 >5 个 tab）可能触发滑动验证
 - (2026-03) 部分内容在未登录状态下显示"内容不存在"，实际是反爬行为而非真的不存在
+- SPA 仅 `document.readyState===complete` 不够，必须用 `waitFor` 或 `/wait` 等真实 DOM

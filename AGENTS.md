@@ -44,6 +44,11 @@ python scripts/export_mindmap.py -i output/briefs.json -o output/mindmap.html
 
 Or all-in-one: `python scripts/start_my_day.py`
 
+## Version / updates
+
+- Project version is in repo root `VERSION`. Run `python scripts/check_update.py` to compare with GitHub.
+- `start_my_day.py` warns on stderr when upstream is newer (cached ~24h). Set `HOT_CREATOR_SKIP_UPDATE_CHECK=1` to disable.
+
 ## Rules
 
 - Use ONLY `scripts/*.py` tools — do NOT substitute with external skills

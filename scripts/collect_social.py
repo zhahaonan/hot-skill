@@ -30,6 +30,14 @@ SCHEMA = {
                 "items": {"type": "string", "enum": ["xiaohongshu", "douyin", "weibo_rising"]},
                 "description": "Social platforms to scrape",
                 "default": ["xiaohongshu", "douyin", "weibo_rising"]
+            },
+            "xiaohongshu_search": {
+                "type": "string",
+                "description": "Optional keyword: uses in-page search on 小红书 (not direct URL — avoids xsec_token block)"
+            },
+            "search_query": {
+                "type": "string",
+                "description": "Alias for xiaohongshu_search"
             }
         }
     },
@@ -56,7 +64,8 @@ SCHEMA = {
     },
     "prerequisites": ["CDP Proxy running (node scripts/cdp/check.mjs)", "Chrome remote debugging enabled"],
     "examples": {
-        "cli": "python scripts/collect_social.py --targets xiaohongshu,weibo_rising -o output/social.json"
+        "cli": "python scripts/collect_social.py --targets xiaohongshu,weibo_rising -o output/social.json",
+        "cli_search": "python scripts/collect_social.py -t xiaohongshu -q 露营 -o output/xhs.json"
     },
     "errors": {
         "cdp_not_available": "CDP Proxy 未启动 → node scripts/cdp/check.mjs",
@@ -68,12 +77,17 @@ SCHEMA = {
 
 
 def ensure_cdp_proxy() -> bool:
-    """Check if CDP proxy is running, start if not."""
+    """Check if CDP proxy is running and Chrome is connected; start proxy if needed."""
     try:
         resp = requests.get(f"{CDP_PROXY_BASE}/health", timeout=3)
         data = resp.json()
-        if data.get("status") == "ok":
+        # health 可能 status=ok 但 connected=false（Chrome 未连上），/new 会失败
+        if data.get("status") == "ok" and data.get("connected") is True:
             return True
+        if data.get("status") == "ok":
+            t = requests.get(f"{CDP_PROXY_BASE}/targets", timeout=3)
+            if t.ok and isinstance(t.json(), list):
+                return True
     except Exception:
         pass
 
@@ -92,25 +106,51 @@ def ensure_cdp_proxy() -> bool:
         return False
 
 
-def cdp_new_tab(url: str) -> str | None:
-    """Open a new background tab and return targetId."""
+def cdp_new_tab(
+    url: str,
+    wait_for: str | None = None,
+    wait_timeout_ms: int = 35000,
+) -> tuple[str | None, dict | None]:
+    """
+    Open a new background tab. Optional wait_for: CSS selector for SPA (e.g. 小红书).
+    Returns (targetId, response_json).
+    """
     try:
-        resp = requests.get(f"{CDP_PROXY_BASE}/new", params={"url": url}, timeout=20)
+        params: dict = {"url": url}
+        if wait_for:
+            params["waitFor"] = wait_for
+            params["waitTimeout"] = str(wait_timeout_ms)
+        timeout_sec = max(90, wait_timeout_ms // 1000 + 45)
+        resp = requests.get(f"{CDP_PROXY_BASE}/new", params=params, timeout=timeout_sec)
         data = resp.json()
-        return data.get("targetId")
+        return data.get("targetId"), data
     except Exception as e:
         print(f"[collect_social] Failed to open tab: {e}", file=sys.stderr)
-        return None
+        return None, None
 
 
-def cdp_eval(target_id: str, js_code: str) -> dict | None:
+def cdp_wait_selector(target_id: str, selector: str, timeout_ms: int = 30000) -> dict:
+    """Block until selector exists (for SPA lazy content)."""
+    try:
+        sec = max(60, timeout_ms // 1000 + 15)
+        resp = requests.get(
+            f"{CDP_PROXY_BASE}/wait",
+            params={"target": target_id, "selector": selector, "timeout": str(timeout_ms)},
+            timeout=sec,
+        )
+        return resp.json()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def cdp_eval(target_id: str, js_code: str, timeout_sec: int = 45) -> dict | None:
     """Execute JS in a tab and return result."""
     try:
         resp = requests.post(
             f"{CDP_PROXY_BASE}/eval",
             params={"target": target_id},
             data=js_code.encode("utf-8"),
-            timeout=15
+            timeout=timeout_sec
         )
         return resp.json()
     except Exception as e:
@@ -140,7 +180,7 @@ def cdp_close(target_id: str):
 
 def scrape_weibo_rising() -> list[dict]:
     """Scrape Weibo hot search / rising trends."""
-    target_id = cdp_new_tab("https://s.weibo.com/top/summary")
+    target_id, _ = cdp_new_tab("https://s.weibo.com/top/summary")
     if not target_id:
         raise RuntimeError("Failed to open Weibo page")
 
@@ -180,58 +220,127 @@ def scrape_weibo_rising() -> list[dict]:
         cdp_close(target_id)
 
 
-def scrape_xiaohongshu() -> list[dict]:
-    """Scrape Xiaohongshu trending topics."""
-    target_id = cdp_new_tab("https://www.xiaohongshu.com/explore")
+def scrape_xiaohongshu(search_query: str | None = None) -> list[dict]:
+    """
+    Scrape Xiaohongshu explore feed or search results.
+    search_query: optional keyword; uses in-page search box (avoid direct /search_result URL — xsec_token).
+    """
+    # SPA：等搜索框出现再操作，比只等 document.complete 可靠
+    wait_sel = (
+        'input[placeholder*="搜索"], input[placeholder*="Search"], '
+        'input[type="search"], header input[type="text"]'
+    )
+    target_id, meta = cdp_new_tab(
+        "https://www.xiaohongshu.com/explore",
+        wait_for=wait_sel,
+        wait_timeout_ms=45000,
+    )
     if not target_id:
         raise RuntimeError("Failed to open Xiaohongshu page")
 
     try:
-        time.sleep(3)
+        wf = (meta or {}).get("waitFor") or {}
+        if not wf.get("ok"):
+            print(
+                "[collect_social] Xiaohongshu: waitFor timeout, continuing after delay",
+                file=sys.stderr,
+            )
+            time.sleep(5)
+        else:
+            time.sleep(1)
+
+        q = (search_query or "").strip()
+        if q:
+            q_json = json.dumps(q, ensure_ascii=False)
+            submit = cdp_eval(
+                target_id,
+                f"""
+            JSON.stringify((() => {{
+                const keyword = {q_json};
+                const inputs = [...document.querySelectorAll(
+                    'input[placeholder*="搜索"], input[placeholder*="Search"], input[type="search"], header input[type="text"]'
+                )];
+                const inp = inputs.find(i => i.offsetParent !== null) || inputs[0];
+                if (!inp) return {{ error: 'no_search_input' }};
+                inp.focus();
+                const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+                if (proto && proto.set) proto.set.call(inp, keyword);
+                else inp.value = keyword;
+                inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                inp.dispatchEvent(new KeyboardEvent('keydown', {{
+                    key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+                }}));
+                inp.dispatchEvent(new KeyboardEvent('keyup', {{
+                    key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+                }}));
+                return {{ ok: true }};
+            }})())
+            """,
+                timeout_sec=30,
+            )
+            if submit and submit.get("value"):
+                try:
+                    info = json.loads(submit["value"]) if isinstance(submit["value"], str) else submit["value"]
+                    if isinstance(info, dict) and info.get("error"):
+                        print(f"[collect_social] Xiaohongshu search: {info}", file=sys.stderr)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            time.sleep(2)
+            cdp_wait_selector(
+                target_id,
+                'a[href*="/explore/"], a[href*="/search_result"], [class*="note-item"], a[href*="xsec_token"]',
+                timeout_ms=25000,
+            )
+            time.sleep(2)
+
         cdp_scroll(target_id, "bottom")
-        time.sleep(1)
+        time.sleep(2)
 
         result = cdp_eval(target_id, """
             JSON.stringify((() => {
                 const items = [];
-                // Try multiple possible selectors for trending/hot content
-                const selectors = [
+                const seen = new Set();
+                function pushItem(rank, title, url) {
+                    const t = (title || '').trim().split('\\n')[0].trim();
+                    if (!t || t.length < 2 || t.length > 200) return;
+                    if (seen.has(t)) return;
+                    seen.add(t);
+                    items.push({ rank: items.length + 1, title: t, url: url || '' });
+                }
+                const hotSelectors = [
                     '.hot-item', '.trending-item', '[class*="hot-list"]',
-                    '[class*="trending"]', '.channel-item', '.search-hot-item'
+                    '[class*="trending"]', '.channel-item', '.search-hot-item',
+                    '[class*="HotSearch"]', '[class*="hotSearch"]'
                 ];
-                for (const sel of selectors) {
+                for (const sel of hotSelectors) {
                     const els = document.querySelectorAll(sel);
                     if (els.length > 0) {
-                        els.forEach((el, i) => {
+                        els.forEach((el) => {
                             const title = el.textContent?.trim();
-                            if (title && title.length < 200) {
-                                items.push({
-                                    rank: i + 1,
-                                    title: title.split('\\n')[0].trim(),
-                                    url: el.querySelector('a')?.href || ''
-                                });
-                            }
+                            const a = el.querySelector('a');
+                            pushItem(0, title, a?.href || '');
                         });
                         break;
                     }
                 }
-                // Fallback: extract visible note titles from explore page
                 if (items.length === 0) {
-                    document.querySelectorAll('[class*="note-item"], .feeds-page .note-item, section').forEach((el, i) => {
-                        const titleEl = el.querySelector('[class*="title"], h3, a');
-                        const title = titleEl?.textContent?.trim();
-                        if (title && title.length > 2 && title.length < 200) {
-                            items.push({
-                                rank: i + 1,
-                                title: title,
-                                url: titleEl?.closest('a')?.href || el.querySelector('a')?.href || ''
-                            });
-                        }
+                    document.querySelectorAll('a[href*="/explore/"], a[href*="/search_result/"]').forEach((a) => {
+                        const title = a.textContent?.trim() || a.getAttribute('title') || '';
+                        pushItem(0, title, a.href || '');
                     });
                 }
-                return items.slice(0, 30);
+                if (items.length === 0) {
+                    document.querySelectorAll('[class*="note-item"], section a').forEach((el) => {
+                        const titleEl = el.querySelector('[class*="title"], [class*="desc"], h3, span');
+                        const title = titleEl?.textContent?.trim() || el.textContent?.trim();
+                        const a = el.tagName === 'A' ? el : el.querySelector('a');
+                        pushItem(0, title, a?.href || '');
+                    });
+                }
+                return items.slice(0, 40);
             })())
-        """)
+        """, timeout_sec=45)
 
         if not result or "value" not in result:
             raise RuntimeError("Failed to extract Xiaohongshu data from DOM")
@@ -254,7 +363,7 @@ def scrape_xiaohongshu() -> list[dict]:
 
 def scrape_douyin() -> list[dict]:
     """Scrape Douyin trending from Juliangsuantu or Douyin hot page."""
-    target_id = cdp_new_tab("https://www.douyin.com/hot")
+    target_id, _ = cdp_new_tab("https://www.douyin.com/hot")
     if not target_id:
         raise RuntimeError("Failed to open Douyin page")
 
@@ -312,10 +421,11 @@ def scrape_douyin() -> list[dict]:
 
 
 SCRAPERS = {
-    "xiaohongshu": scrape_xiaohongshu,
     "douyin": scrape_douyin,
     "weibo_rising": scrape_weibo_rising,
 }
+
+DEFAULT_SOCIAL_TARGETS = ["xiaohongshu", "douyin", "weibo_rising"]
 
 
 def main():
@@ -324,35 +434,55 @@ def main():
         "--targets", "-t",
         help="Comma-separated target IDs (default: xiaohongshu,douyin,weibo_rising)"
     )
+    parser.add_argument(
+        "--xiaohongshu-search", "-q",
+        default=None,
+        help="小红书站内搜索关键词（在发现页搜索框输入，避免直接打开 search_result URL）",
+    )
     args = parser.parse_args()
     handle_schema(args, SCHEMA)
 
     input_data = read_json_input(args)
+    if args.xiaohongshu_search:
+        input_data["xiaohongshu_search"] = args.xiaohongshu_search.strip()
 
     if args.targets:
         targets = [t.strip() for t in args.targets.split(",")]
     elif "targets" in input_data:
         targets = input_data["targets"]
     else:
-        targets = list(SCRAPERS.keys())
+        targets = list(DEFAULT_SOCIAL_TARGETS)
 
     if not ensure_cdp_proxy():
         fail(
-            "CDP Proxy not available. Ensure Chrome remote debugging is enabled "
-            "(chrome://inspect/#remote-debugging) and Node.js 22+ is installed."
+            "CDP Proxy not available. Run: node scripts/cdp/check.mjs — "
+            "Chrome must allow remote debugging (chrome://inspect/#remote-debugging), Node 22+."
         )
+
+    xhs_q = (
+        input_data.get("xiaohongshu_search")
+        or input_data.get("search_query")
+        or input_data.get("query")
+        or ""
+    )
+    if isinstance(xhs_q, str):
+        xhs_q = xhs_q.strip() or None
+    else:
+        xhs_q = None
 
     all_items = []
     errors = []
 
     for target in targets:
-        scraper = SCRAPERS.get(target)
-        if not scraper:
-            errors.append(f"Unknown target: {target}")
-            continue
-
         try:
-            items = scraper()
+            if target == "xiaohongshu":
+                items = scrape_xiaohongshu(xhs_q)
+            else:
+                scraper = SCRAPERS.get(target)
+                if not scraper:
+                    errors.append(f"Unknown target: {target}")
+                    continue
+                items = scraper()
             all_items.extend(items)
             print(f"[collect_social] {platform_name(target)}: {len(items)} items", file=sys.stderr)
         except Exception as e:

@@ -8,12 +8,114 @@ import sys
 import json
 import argparse
 import os
+import time
 import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-VERSION = "3.2.0"
+
+def _read_version_file() -> str:
+    vf = Path(__file__).resolve().parent.parent / "VERSION"
+    if vf.exists():
+        line = vf.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+        if line and len(line) < 64:
+            return line
+    return "0.0.0"
+
+
+VERSION = _read_version_file()
 SKILL_ROOT = Path(__file__).resolve().parent.parent
+
+# 上游版本文件（与仓库根目录 VERSION 同步发布）
+UPSTREAM_VERSION_URL = os.environ.get(
+    "HOT_CREATOR_VERSION_URL",
+    "https://raw.githubusercontent.com/zhahaonan/hot-creator/main/VERSION",
+)
+UPSTREAM_REPO_URL = os.environ.get(
+    "HOT_CREATOR_REPO_URL",
+    "https://github.com/zhahaonan/hot-creator",
+)
+VERSION_CHECK_CACHE = SKILL_ROOT / "output" / ".version_check_cache"
+
+
+def version_tuple(ver: str) -> tuple:
+    """Parse semver-ish string to tuple for compare (digits only per segment)."""
+    parts = []
+    for seg in ver.strip().split("."):
+        num = ""
+        for ch in seg:
+            if ch.isdigit():
+                num += ch
+            else:
+                break
+        parts.append(int(num) if num else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:4])
+
+
+def upstream_is_newer(local: str, remote: str) -> bool:
+    return version_tuple(remote) > version_tuple(local)
+
+
+def fetch_upstream_version(timeout: float = 3.0) -> str | None:
+    try:
+        import requests
+        r = requests.get(UPSTREAM_VERSION_URL.strip(), timeout=timeout)
+        if not r.ok:
+            return None
+        line = r.text.strip().splitlines()[0].strip()
+        if line and len(line) < 64 and line[0].isdigit():
+            return line
+    except Exception:
+        pass
+    return None
+
+
+def warn_if_newer_upstream(cache_hours: int = 24) -> None:
+    """
+    If local VERSION is older than upstream GitHub VERSION, print stderr hint.
+    Cached to avoid hitting GitHub on every script run. Disable: HOT_CREATOR_SKIP_UPDATE_CHECK=1
+    """
+    if os.environ.get("HOT_CREATOR_SKIP_UPDATE_CHECK", "").strip():
+        return
+    local = VERSION
+    now = time.time()
+    remote = None
+    try:
+        VERSION_CHECK_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    if VERSION_CHECK_CACHE.exists():
+        try:
+            data = json.loads(VERSION_CHECK_CACHE.read_text(encoding="utf-8"))
+            checked = float(data.get("checked_at", 0))
+            if now - checked < cache_hours * 3600:
+                remote = data.get("remote")
+        except Exception:
+            pass
+    if remote is None:
+        remote = fetch_upstream_version()
+        try:
+            VERSION_CHECK_CACHE.write_text(
+                json.dumps({"checked_at": now, "remote": remote}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+    if not remote:
+        return
+    if upstream_is_newer(local, remote):
+        print(
+            "\n[hot-creator] —— 有新版本 ——\n"
+            f"  当前本地: {local}\n"
+            f"  上游仓库: {remote}\n"
+            f"  请在 skill 目录执行: git pull origin main\n"
+            f"  或重新安装: {UPSTREAM_REPO_URL}\n"
+            f"  跳过此提示: 环境变量 HOT_CREATOR_SKIP_UPDATE_CHECK=1\n"
+            f"  自建镜像: 设置 HOT_CREATOR_VERSION_URL / HOT_CREATOR_REPO_URL\n",
+            file=sys.stderr,
+        )
 
 # Auto-load .env file if present (for standalone CLI use)
 _env_file = SKILL_ROOT / ".env"
@@ -56,6 +158,67 @@ OUTPUT_DIR = SKILL_ROOT / "output"
 def platform_name(platform_id: str) -> str:
     entry = PLATFORMS.get(platform_id)
     return entry["name"] if entry else platform_id
+
+
+# Brief.materials: human-readable category names + atomic lines (not 一、二、三 outline blobs)
+MATERIAL_CATEGORY_LABELS = {
+    "data_points": "核心数据",
+    "quotes": "引用金句",
+    "controversies": "争议话题",
+    "emotion_triggers": "情绪触点",
+    "knowledge_gems": "知识增量",
+    "media_hooks": "镜头 / 画面素材",
+    "screenshot_lines": "封面与字幕条文案",
+    "sound_bites": "口播短句（≤20字优先）",
+    "sources": "信源与报道",
+    "b_roll": "B-roll 建议",
+}
+
+
+def material_category_label(key: str) -> str:
+    return MATERIAL_CATEGORY_LABELS.get(key, key.replace("_", " ").title())
+
+
+def format_material_item(item) -> str:
+    """One atomic fact/quote/hook; supports dict with fact/source/how_to_use."""
+    if item is None:
+        return ""
+    if isinstance(item, str):
+        return item.strip()
+    if isinstance(item, dict):
+        fact = (
+            item.get("fact")
+            or item.get("content")
+            or item.get("text")
+            or item.get("line")
+            or item.get("title")
+            or ""
+        )
+        takeaway = item.get("takeaway") or item.get("摘要") or ""
+        if not fact and takeaway:
+            fact = takeaway
+        source = item.get("source") or item.get("出处") or ""
+        url = item.get("url") or ""
+        use = item.get("how_to_use") or item.get("usage") or item.get("用于") or ""
+        platform = item.get("platform") or item.get("适合平台") or ""
+        bits = []
+        if fact:
+            bits.append(str(fact).strip())
+        if url:
+            bits.append(f"链接 {url}")
+        elif source and str(source) not in str(fact):
+            bits.append(f"来源 {source}")
+        if platform:
+            bits.append(f"适合 {platform}")
+        if use:
+            bits.append(f"用法 {use.strip()}")
+        if bits:
+            return " · ".join(bits)
+        try:
+            return json.dumps(item, ensure_ascii=False)
+        except Exception:
+            return str(item)
+    return str(item).strip()
 
 
 def china_now() -> datetime:

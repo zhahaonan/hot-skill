@@ -16,7 +16,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from _common import (
     base_argparser, handle_schema, read_json_input, write_json_output,
-    fail, today_str, OUTPUT_DIR
+    fail, today_str, OUTPUT_DIR,
+    format_material_item, material_category_label,
 )
 
 SCHEMA = {
@@ -227,19 +228,29 @@ def build_topic_note(trend: dict, date: str, kb: dict = None, today_topics: list
 
         materials = brief.get("materials", [])
         if materials:
-            lines.append("## 关键素材")
+            lines.append("## 关键素材（可执行颗粒度）")
+            lines.append(
+                "> 每条应可直接用于口播/字幕/镜头；若出现「一、二、三」长章节，请改写到上方「内容大纲」而非堆在此处。"
+            )
             if isinstance(materials, dict):
                 for category, items in materials.items():
-                    lines.append(f"### {category}")
+                    label = material_category_label(category)
+                    lines.append(f"### {label}")
                     if isinstance(items, list):
-                        for m in items:
-                            lines.append(f"- {m}")
+                        for i, m in enumerate(items, 1):
+                            line = format_material_item(m)
+                            if line:
+                                lines.append(f"{i}. {line}")
                     else:
-                        lines.append(f"- {items}")
+                        line = format_material_item(items)
+                        if line:
+                            lines.append(f"- {line}")
                     lines.append("")
             elif isinstance(materials, list):
-                for m in materials:
-                    lines.append(f"- {m}")
+                for i, m in enumerate(materials, 1):
+                    line = format_material_item(m)
+                    if line:
+                        lines.append(f"{i}. {line}")
                 lines.append("")
 
         benchmarks = brief.get("benchmarks", [])

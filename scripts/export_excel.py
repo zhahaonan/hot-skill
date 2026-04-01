@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (
     base_argparser, handle_schema, read_json_input, write_json_output,
-    fail, today_str
+    fail, today_str,
+    format_material_item, material_category_label,
 )
 
 try:
@@ -239,17 +240,24 @@ def build_titles_sheet(wb, trends):
 
 
 def flatten_materials(materials) -> str:
-    """Handle both old (list) and new (dict) materials format."""
+    """Handle list or dict; dict values may be strings or structured objects."""
     if isinstance(materials, list):
-        return "\n".join(f"• {m}" for m in materials)
+        return "\n".join(
+            f"• {format_material_item(m)}" for m in materials if format_material_item(m)
+        )
     if isinstance(materials, dict):
         lines = []
         for category, items in materials.items():
+            label = material_category_label(category)
             if isinstance(items, list):
                 for item in items:
-                    lines.append(f"• [{category}] {item}")
-            elif isinstance(items, str):
-                lines.append(f"• [{category}] {items}")
+                    line = format_material_item(item)
+                    if line:
+                        lines.append(f"• [{label}] {line}")
+            else:
+                line = format_material_item(items)
+                if line:
+                    lines.append(f"• [{label}] {line}")
         return "\n".join(lines)
     return str(materials) if materials else ""
 

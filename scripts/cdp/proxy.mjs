@@ -238,6 +238,26 @@ async function waitForLoad(sessionId, timeoutMs = 15000) {
   });
 }
 
+/** SPA: wait until selector matches (e.g. Xiaohongshu feed / search box). */
+async function waitForSelector(sessionId, selector, timeoutMs = 25000) {
+  const sel = JSON.stringify(selector);
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const resp = await sendCDP('Runtime.evaluate', {
+        expression: `!!document.querySelector(${sel})`,
+        returnByValue: true,
+        awaitPromise: true,
+      }, sessionId);
+      if (resp.result?.result?.value === true) {
+        return { ok: true, waitedMs: Date.now() - start };
+      }
+    } catch { /* ignore */ }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return { ok: false, error: 'timeout', waitedMs: Date.now() - start };
+}
+
 async function readBody(req) {
   let body = '';
   for await (const chunk of req) body += chunk;
@@ -276,6 +296,12 @@ const server = http.createServer(async (req, res) => {
         try {
           const sid = await ensureSession(targetId);
           await waitForLoad(sid);
+          const waitSel = q.waitFor || q.wait_for;
+          if (waitSel) {
+            const w = await waitForSelector(sid, waitSel, parseInt(q.waitTimeout || '30000', 10));
+            res.end(JSON.stringify({ targetId, waitFor: w }));
+            return;
+          }
         } catch { /* non-fatal */ }
       }
 
@@ -460,6 +486,22 @@ const server = http.createServer(async (req, res) => {
       res.end(resp.result?.result?.value || '{}');
     }
 
+    else if (pathname === '/wait') {
+      const sid = await ensureSession(q.target);
+      const selector = q.selector;
+      if (!selector) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Missing query param: selector' }));
+        return;
+      }
+      const timeoutMs = parseInt(q.timeout || '30000', 10);
+      const w = await waitForSelector(sid, selector, timeoutMs);
+      if (!w.ok) {
+        res.statusCode = 408;
+      }
+      res.end(JSON.stringify(w));
+    }
+
     else {
       res.statusCode = 404;
       res.end(JSON.stringify({
@@ -478,6 +520,8 @@ const server = http.createServer(async (req, res) => {
           '/setFiles?target=': 'POST body=JSON - Set file input',
           '/scroll?target=&y=&direction=': 'GET - Scroll page',
           '/screenshot?target=&file=': 'GET - Screenshot',
+          '/wait?target=&selector=&timeout=': 'GET - Wait until CSS selector exists (SPA)',
+          '/new?url=&waitFor=&waitTimeout=': 'GET - New tab; optional waitFor selector after load',
         },
       }));
     }

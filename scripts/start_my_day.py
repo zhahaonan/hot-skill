@@ -14,12 +14,13 @@ import subprocess
 import time
 from pathlib import Path
 from _common import (
-    base_argparser, handle_schema, fail, today_str, OUTPUT_DIR, SKILL_ROOT
+    base_argparser, handle_schema, fail, today_str, OUTPUT_DIR, SKILL_ROOT,
+    warn_if_newer_upstream,
 )
 
 SCHEMA = {
     "name": "start_my_day",
-    "description": "One-command orchestrator: collect → analyze → brief → export (Obsidian + Excel + Graph) + knowledge base update. Supports product mode with --profile.",
+    "description": "One-command orchestrator: collect → analyze → brief → export (Obsidian + Excel + Graph) + knowledge base update. Compares VERSION to GitHub on run (stderr hint if newer). Supports product mode with --profile.",
     "input": {
         "type": "object",
         "properties": {
@@ -141,12 +142,17 @@ def main():
                         help="Raw product description text (auto-generates profile via product_profile)")
     parser.add_argument("--no-export", action="store_true",
                         help="Skip exports, only collect+analyze+brief+KB")
+    parser.add_argument("--no-update-check", action="store_true",
+                        help="Do not compare local VERSION with GitHub (no network)")
     args = parser.parse_args()
+    if args.no_update_check:
+        os.environ["HOT_CREATOR_SKIP_UPDATE_CHECK"] = "1"
     handle_schema(args, SCHEMA)
 
     config = load_config()
     date = today_str()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    warn_if_newer_upstream()
 
     collect_cfg = config.get("collect", {})
     analyze_cfg = config.get("analyze", {})
