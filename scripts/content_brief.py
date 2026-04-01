@@ -19,7 +19,7 @@ litellm = None  # lazy import — only needed for CLI mode
 
 SCHEMA = {
     "name": "content_brief",
-    "description": "Generate creative briefs per trend topic. Pass --profile for product x trend mode. CLI needs AI_API_KEY; Agent-native: Agent generates briefs directly.",
+    "description": "Generate product x trend creative briefs: full content plans combining hot topics with your product/brand. --profile required for best results.",
     "input": {
         "type": "object",
         "properties": {
@@ -63,9 +63,8 @@ SCHEMA = {
         }
     },
     "examples": {
-        "cli_generic": "python scripts/content_brief.py -i trends.json --top 15 -o output/briefs.json",
-        "cli_product": "python scripts/content_brief.py -i trends.json --profile profile.json --top 10 -o briefs.json",
-        "agent_native": "Agent reads trends JSON + prompt-templates.md#content_brief, generates briefs in dialogue"
+        "cli": "python scripts/content_brief.py -i trends.json --profile profile.json --top 10 -o briefs.json",
+        "agent_native": "Agent reads trends JSON + product info, generates briefs directly"
     },
     "errors": {
         "no_api_key": "AI_API_KEY 未设置 → Agent 原生模式不需要",
@@ -75,60 +74,6 @@ SCHEMA = {
 }
 
 
-def load_brief_prompt() -> tuple[str, str]:
-    """Load content_brief prompts from reference/prompt-templates.md."""
-    tmpl_path = SKILL_ROOT / "reference" / "prompt-templates.md"
-
-    default_sys = "你是一个全平台内容策划专家，服务过大量头部创作者。你的建议实操性强，不说空话。"
-    default_user = "请为以下热点话题生成完整创作简报，返回 JSON 格式。\n\n{trends_json}"
-
-    if not tmpl_path.exists():
-        return default_sys, default_user
-
-    content = tmpl_path.read_text(encoding="utf-8")
-
-    sys_prompt = ""
-    user_prompt = ""
-
-    in_section = False
-    in_code = False
-    code_lines = []
-    last_heading = ""
-
-    for line in content.split("\n"):
-        if not in_code:
-            if line.startswith("## ") and "content_brief" in line:
-                in_section = True
-                continue
-            if in_section and line.startswith("## ") and "content_brief" not in line:
-                break
-
-        if in_section:
-            if not in_code and "### " in line:
-                last_heading = line.strip().lower()
-                continue
-
-            if line.strip().startswith("```") and not in_code:
-                in_code = True
-                code_lines = []
-                continue
-            elif line.strip().startswith("```") and in_code:
-                in_code = False
-                block = "\n".join(code_lines)
-                if "system" in last_heading and block.strip():
-                    sys_prompt = block
-                elif "{trends_json}" in block:
-                    user_prompt = block
-                continue
-            if in_code:
-                code_lines.append(line)
-
-    if not sys_prompt:
-        sys_prompt = default_sys
-    if not user_prompt:
-        user_prompt = default_user
-
-    return sys_prompt, user_prompt
 
 
 def call_ai(system_prompt: str, user_prompt: str, model: str, api_key: str, api_base: str = None,
@@ -368,12 +313,9 @@ def _prepare_batch_for_prompt(batch: list[dict]) -> list[dict]:
 
 def process_batch(trends: list[dict], model: str, api_key: str, api_base: str = None,
                   batch_size: int = 5, profile: dict = None) -> list[dict]:
-    """Process trends in batches. If profile is provided, generates product x trend briefs."""
-    if profile:
-        sys_prompt = PRODUCT_BRIEF_SYSTEM
-        user_template = PRODUCT_BRIEF_USER
-    else:
-        sys_prompt, user_template = load_brief_prompt()
+    """Process trends in batches. Always generates product x trend briefs."""
+    sys_prompt = PRODUCT_BRIEF_SYSTEM
+    user_template = PRODUCT_BRIEF_USER
 
     has_context = any(t.get("context") for t in trends)
     if has_context:
@@ -391,26 +333,21 @@ def process_batch(trends: list[dict], model: str, api_key: str, api_base: str = 
         total_batches = (len(trends) + batch_size - 1) // batch_size
 
         enriched_count = sum(1 for t in batch if t.get("context"))
-        mode_label = "product x trend" if profile else "generic"
         ctx_label = f", {enriched_count} enriched" if enriched_count else ""
         print(
             f"[content_brief] Batch {batch_num}/{total_batches} "
-            f"({len(batch)} topics{ctx_label}, {mode_label})...",
+            f"({len(batch)} topics{ctx_label})...",
             file=sys.stderr
         )
 
         prepared = _prepare_batch_for_prompt(batch)
         trends_json = json.dumps(prepared, ensure_ascii=False, indent=None)
-
-        if profile:
-            profile_json = json.dumps(profile, ensure_ascii=False, indent=None)
-            user_prompt = (
-                user_template
-                .replace("{trends_json}", trends_json)
-                .replace("{profile_json}", profile_json)
-            )
-        else:
-            user_prompt = user_template.replace("{trends_json}", trends_json)
+        profile_json = json.dumps(profile or {}, ensure_ascii=False, indent=None)
+        user_prompt = (
+            user_template
+            .replace("{trends_json}", trends_json)
+            .replace("{profile_json}", profile_json)
+        )
 
         try:
             response_text = call_ai(sys_prompt, user_prompt, model, api_key, api_base)
@@ -465,11 +402,9 @@ def main():
     if args.top > 0:
         trends = trends[:args.top]
 
-    mode = "product x trend" if profile else "generic"
-    effective_batch = 1 if profile and args.batch_size > 1 else args.batch_size
-    print(f"[content_brief] Mode: {mode} | {len(trends)} topics | batch={effective_batch} | {model}", file=sys.stderr)
-    if profile:
-        print(f"[content_brief] Product: {profile.get('name', 'Unknown')}", file=sys.stderr)
+    effective_batch = 1 if profile else args.batch_size
+    product_name = profile.get('name', 'Unknown') if profile else '(no profile)'
+    print(f"[content_brief] {len(trends)} topics | batch={effective_batch} | product={product_name} | {model}", file=sys.stderr)
 
     briefed = process_batch(trends, model, api_key, api_base or None, effective_batch, profile)
 

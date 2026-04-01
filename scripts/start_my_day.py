@@ -20,7 +20,7 @@ from _common import (
 
 SCHEMA = {
     "name": "start_my_day",
-    "description": "One-command orchestrator: collect → analyze → brief → export (Obsidian + Excel + Graph) + knowledge base update. Compares VERSION to GitHub on run (stderr hint if newer). Supports product mode with --profile.",
+    "description": "One-command orchestrator: collect → analyze → product x trend brief → export. Always combines trends with product/brand context for actionable content ideas.",
     "input": {
         "type": "object",
         "properties": {
@@ -138,69 +138,40 @@ def run_script(script_name: str, args: list[str], step_name: str,
 
 
 def interactive_setup(config: dict) -> dict:
-    """Interactive mode selection when no CLI flags are provided."""
+    """Ask for product info if not already provided."""
     product_cfg = config.get("product", {})
     default_profile = product_cfg.get("default_profile", "")
+    result = {"profile_path": "", "product_text": ""}
 
     print("\n" + "=" * 50, file=sys.stderr)
-    print("  🔥 HotCreator — 今日选题助手", file=sys.stderr)
+    print("  HotCreator — 产品 x 热点内容策划", file=sys.stderr)
     print("=" * 50, file=sys.stderr)
-    print("\n请选择工作模式:\n", file=sys.stderr)
-    print("  [1] 热点模式 — 纯热点趋势分析 + 创作简报", file=sys.stderr)
-    print("  [2] 产品模式 — 结合产品做热点内容策划", file=sys.stderr)
-    print("  [3] 快速模式 — 只看热点排行，不生成简报\n", file=sys.stderr)
 
-    choice = ""
-    while choice not in ("1", "2", "3"):
-        try:
-            choice = input("输入编号 (1/2/3): ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n已取消", file=sys.stderr)
-            sys.exit(0)
+    if default_profile and Path(default_profile).exists():
+        print(f"\n检测到预设产品画像: {default_profile}", file=sys.stderr)
+        use_default = ""
+        while use_default not in ("y", "n"):
+            try:
+                use_default = input("使用该画像？(y/n): ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\n已取消", file=sys.stderr)
+                sys.exit(0)
+        if use_default == "y":
+            result["profile_path"] = default_profile
+            return result
 
-    result = {"mode": "hotspot", "profile_path": "", "product_text": "", "no_brief": False}
+    print("\n请输入你的产品/品牌描述（一段话即可，回车结束）:", file=sys.stderr)
+    print("例如：我们是一个AI写作助手，帮助内容创作者快速生成文案...\n", file=sys.stderr)
+    try:
+        text = input("> ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n已取消", file=sys.stderr)
+        sys.exit(0)
 
-    if choice == "1":
-        result["mode"] = "hotspot"
-        print("\n✅ 热点模式 — 采集全网热榜 → AI 分析 → 创作简报 → 导出\n", file=sys.stderr)
-
-    elif choice == "2":
-        result["mode"] = "product"
-        print("\n产品模式需要产品信息。", file=sys.stderr)
-
-        if default_profile and Path(default_profile).exists():
-            print(f"\n检测到预设产品画像: {default_profile}", file=sys.stderr)
-            use_default = ""
-            while use_default not in ("y", "n"):
-                try:
-                    use_default = input("使用该画像？(y/n): ").strip().lower()
-                except (EOFError, KeyboardInterrupt):
-                    print("\n已取消", file=sys.stderr)
-                    sys.exit(0)
-            if use_default == "y":
-                result["profile_path"] = default_profile
-                print(f"\n✅ 产品模式 — 使用 {default_profile}\n", file=sys.stderr)
-                return result
-
-        print("\n请输入产品描述（一段话即可，回车结束）:", file=sys.stderr)
-        print("例如：我们是一个AI写作助手，帮助内容创作者快速生成文案...\n", file=sys.stderr)
-        try:
-            text = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n已取消", file=sys.stderr)
-            sys.exit(0)
-
-        if not text:
-            print("\n⚠️ 未输入产品信息，回退到热点模式\n", file=sys.stderr)
-            result["mode"] = "hotspot"
-        else:
-            result["product_text"] = text
-            print(f"\n✅ 产品模式 — 将根据产品描述生成画像并结合热点\n", file=sys.stderr)
-
-    elif choice == "3":
-        result["mode"] = "quick"
-        result["no_brief"] = True
-        print("\n✅ 快速模式 — 只采集热榜 + 趋势评分，不生成详细简报\n", file=sys.stderr)
+    if text:
+        result["product_text"] = text
+    else:
+        print("\n⚠️ 未输入产品信息，将只生成趋势排行\n", file=sys.stderr)
 
     return result
 
@@ -237,18 +208,15 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     warn_if_newer_upstream()
 
-    # Interactive mode: when user runs without any mode flags and stdin is a terminal
-    has_mode_flags = (args.profile or getattr(args, "product_text", None)
-                      or args.skip_collect or args.skip_analyze
-                      or (hasattr(args, "input") and args.input))
-    if not has_mode_flags and not args.no_interactive and sys.stdin.isatty():
+    # Interactive: ask for product info if none provided and stdin is a terminal
+    has_product = (args.profile or getattr(args, "product_text", None))
+    has_skip = (args.skip_collect or args.skip_analyze or (hasattr(args, "input") and args.input))
+    if not has_product and not has_skip and not args.no_interactive and sys.stdin.isatty():
         setup = interactive_setup(config)
         if setup["profile_path"]:
             args.profile = setup["profile_path"]
         if setup["product_text"]:
             args.product_text = setup["product_text"]
-        if setup["no_brief"]:
-            args.no_export = True
 
     collect_cfg = config.get("collect", {})
     analyze_cfg = config.get("analyze", {})

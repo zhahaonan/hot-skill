@@ -1,8 +1,8 @@
 # hot-creator
 
-**内容创作者的热点情报助手** — AI Agent Skill for content creators.
+**产品 x 热点内容策划助手** — AI Agent Skill for content creators.
 
-扫描全网热点趋势，AI 评分预测走向，生成完整的内容创作简报。输出 Excel 报表、Obsidian 笔记、Markmap 思维导图。
+采集全网热点趋势，结合你的产品/品牌，生成完整的创作思路和素材。输出 Excel 报表、Obsidian 笔记、D3 关系图谱。
 
 ## Architecture / 架构
 
