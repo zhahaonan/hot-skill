@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-product_profile — Extract text from product documents (PDF/MD/TXT/DOCX).
-
-Skill mode: Use --extract-only to extract text, Agent does the AI analysis.
+product_profile — Extract text from product documents (PDF/TXT/MD).
+Agent does the AI analysis to understand the product.
 """
 
 import sys
@@ -10,128 +9,64 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from pathlib import Path
-from _common import (
-    base_argparser, handle_schema, fail, SKILL_ROOT
-)
+from _common import base_argparser, handle_schema, fail
 
 SCHEMA = {
     "name": "product_profile",
-    "description": "Extract text from product documents (PDF/MD/TXT/DOCX). Agent does the AI analysis.",
-    "input": {
-        "type": "object",
-        "properties": {
-            "file": {
-                "type": "string",
-                "description": "Path to product document (PDF/MD/TXT/DOCX)"
-            }
-        },
-        "required": ["file"]
-    },
-    "output": {
-        "type": "object",
-        "properties": {
-            "text": {"type": "string", "description": "Extracted text content"}
-        }
-    },
-    "examples": {
-        "extract_pdf": "python scripts/product_profile.py --file intro.pdf --extract-only -o output/product-raw.txt",
-        "extract_docx": "python scripts/product_profile.py --file product.docx --extract-only -o output/product-raw.txt"
-    },
-    "errors": {
-        "no_input": "未提供文件路径 → 用 --file",
-        "file_not_found": "文件不存在 → 检查路径",
-        "pdf_parse_failed": "PDF 解析失败 → pip install pypdf",
-        "docx_parse_failed": "DOCX 解析失败 → pip install python-docx"
-    }
+    "description": "Extract text from product documents. Agent analyzes to understand product.",
+    "input": {"type": "object", "properties": {"file": {"type": "string"}}},
+    "output": {"type": "object", "properties": {"text": {"type": "string"}}},
 }
 
 
-def _pdf_to_text(p: Path) -> str:
-    """Extract text from PDF: pypdf first, then PyMuPDF (fitz) if installed."""
-    try:
-        from pypdf import PdfReader
-        reader = PdfReader(str(p))
-        parts = []
-        for page in reader.pages:
-            parts.append(page.extract_text() or "")
-        return "\n".join(parts)
-    except ImportError:
-        pass
-    except Exception:
-        pass
-    try:
-        import fitz  # PyMuPDF
-        doc = fitz.open(str(p))
-        try:
-            return "\n".join(page.get_text() for page in doc)
-        finally:
-            doc.close()
-    except ImportError:
-        pass
-    except Exception:
-        pass
-    return ""
-
-
-def read_product_file(file_path: str) -> str:
-    """Read product document from file."""
+def extract_text(file_path: str) -> str:
+    """Extract text from PDF/TXT/MD file."""
     p = Path(file_path)
     if not p.exists():
-        fail(f"File not found: {file_path}")
+        fail(f"文件不存在: {file_path}")
 
     suffix = p.suffix.lower()
 
+    # TXT/MD: direct read
     if suffix in (".txt", ".md", ".markdown"):
         return p.read_text(encoding="utf-8")
 
+    # PDF: use pypdf
     if suffix == ".pdf":
-        text = _pdf_to_text(p)
-        text = text.strip()
-        if text:
-            return text
-        fail(
-            "PDF 未解析出文本。可能原因：\n"
-            "1. 扫描件/图片版 PDF — 请先 OCR 或改用文字说明\n"
-            "2. 未安装 pypdf — 运行: pip install pypdf\n"
-            "3. 加密 PDF — 请先解密"
-        )
-
-    if suffix == ".docx":
         try:
-            from docx import Document
-            doc = Document(str(p))
-            return "\n".join(par.text for par in doc.paragraphs if par.text.strip())
+            from pypdf import PdfReader
+            reader = PdfReader(str(p))
+            pages = [page.extract_text() or "" for page in reader.pages]
+            text = "\n".join(pages).strip()
+            if text:
+                return text
+            fail("PDF 无文本内容。可能是扫描件，请改用文字说明或先 OCR。")
         except ImportError:
-            fail("读取 .docx 需要: pip install python-docx")
-        except Exception as e:
-            fail(f"DOCX 解析失败: {e}")
+            fail("需要安装 pypdf: pip install pypdf")
 
+    # Fallback
     return p.read_text(encoding="utf-8", errors="ignore")
 
 
 def main():
-    parser = base_argparser("Extract text from product documents")
-    parser.add_argument("--file", "-f", help="Path to product document (PDF/MD/TXT/DOCX)")
-    parser.add_argument("--extract-only", action="store_true", help="Extract text only (default behavior)")
+    parser = base_argparser("Extract text from product document")
+    parser.add_argument("--file", "-f", required=True, help="PDF/TXT/MD file path")
     args = parser.parse_args()
     handle_schema(args, SCHEMA)
 
-    if not args.file:
-        fail("请提供文件路径: --file <路径>")
+    text = extract_text(args.file)
 
-    print(f"[product_profile] Extracting text from: {args.file}", file=sys.stderr)
-    product_text = read_product_file(args.file)
-
-    if len(product_text) > 100000:
-        product_text = product_text[:100000] + "\n\n[...truncated...]"
-        print(f"[product_profile] Truncated to 100000 chars", file=sys.stderr)
+    # Truncate to 50k chars (enough for product info)
+    if len(text) > 50000:
+        text = text[:50000] + "\n\n[已截断]"
+        print(f"[product_profile] 截断至 50000 字符", file=sys.stderr)
 
     if args.output:
         Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.output).write_text(product_text, encoding="utf-8")
-        print(f"[product_profile] Wrote: {args.output}", file=sys.stderr)
+        Path(args.output).write_text(text, encoding="utf-8")
+        print(f"[product_profile] 写入: {args.output}", file=sys.stderr)
     else:
-        print(product_text)
+        print(text)
 
 
 if __name__ == "__main__":

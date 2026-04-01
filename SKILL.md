@@ -1,6 +1,6 @@
 ---
 name: hot-creator
-version: "5.0.0"
+version: "5.1.0"
 description: 产品 x 热点内容策划工具 — 采集全网热点，结合你的产品生成完整创作方案
 user-invocable: true
 metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-creator", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
@@ -123,10 +123,7 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 - 获取微博评论 → 了解舆论风向、争议点
 - 搜索话题相关报道 → 补充真实数据和信源
 
-获取的信息可以通过 `enrich_topics.py` 合并到 trends 数据中：
-```bash
-python {baseDir}/scripts/enrich_topics.py -i output/trends.json -o output/enriched.json
-```
+获取的信息直接写入 trends.json 的 context 字段即可。
 
 **没有 web-access 也不影响核心流程**，Agent 可以用 WebSearch 替代或直接基于采集数据分析。
 
@@ -134,15 +131,34 @@ python {baseDir}/scripts/enrich_topics.py -i output/trends.json -o output/enrich
 
 **Agent 读取 trends.json + 产品画像，自己做内容生成**，输出写入 `output/briefs.json`。
 
-**核心原则：每个热点都要结合产品，产出产品 x 热点的内容方案。**
+**核心原则：只对真正相关的热点生成内容，不强凑。**
 
-- 关联度高（high）→ 输出完整内容方案
-- 关联度中（medium）→ 输出完整内容方案，从行业/场景角度切入
-- 关联度低（low）→ 标注"不建议硬蹭"，只写一句话原因
+#### 关联度判断标准
+
+| 级别 | 判断标准 | 输出要求 |
+|------|----------|----------|
+| **high** | 用户群体直接重叠 / 解决同一痛点 / 行业直接相关 | 完整内容方案 |
+| **medium** | 可从行业视角 / 用户场景 / 价值观角度切入 | 完整内容方案，需加过渡逻辑 |
+| **low** | 没有真实连接点 | 只写一句原因，**不生成内容** |
+
+#### 真实性约束（必须遵守）
+
+1. **素材来源**：所有数据点、金句、信源必须来自：
+   - 热点原始数据（title, snippet, url）
+   - WebSearch/WebFetch 结果
+   - 产品资料
+   - **禁止编造**任何数字、引语、报道
+
+2. **内容数量**：完整内容方案通常 5-8 个（只对 high/medium 话题），不是越多越好
+
+3. **质量标准**：
+   - 每个方案必须有真实的"产品-热点"连接点
+   - 素材清单每条都要有来源标注
+   - 不确定的信息标注"需核实"
 
 输出规范参考 `reference/prompt-templates.md` 的 `## content_brief` 章节。
 
-**每个话题必须包含以下全部内容**：
+#### 每个完整方案包含
 
 1. **产品结合点** — 你的产品跟这个热点的真实连接（第一优先判断）
 2. **创作角度**（1-2个）— 具体角度名 + 完整执行步骤 + 产品角色 + 最适合平台
@@ -194,12 +210,10 @@ python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindm
 |------|------|----------|
 | **collect_hotlist** | 全网热榜+实时采集 | 子智能体执行 |
 | **collect_rss** | RSS 订阅采集 | 子智能体执行 |
-| **enrich_topics** | 合并 WebSearch 结果到趋势数据 | Agent 可选调用 |
-| **product_profile** | PDF/文档文本提取 (--extract-only) | 子智能体执行 |
+| **product_profile** | PDF/文档文本提取 | 子智能体执行 |
 | **export_excel** | Excel 报表导出 | 子智能体执行 |
 | **export_obsidian** | Obsidian .md 笔记导出 | 子智能体执行 |
 | **export_mindmap** | D3 力导向关系图谱导出 | 子智能体执行 |
-| **knowledge_base** | 累积知识库（可选） | Agent 可选调用 |
 
 > `python {baseDir}/scripts/<tool>.py --schema` 查看接口定义。
 

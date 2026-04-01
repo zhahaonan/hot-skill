@@ -6,7 +6,6 @@ JSON I/O, time helpers, platform mapping, error handling, CLI framework.
 import sys
 import json
 import argparse
-import os
 import time
 import traceback
 from datetime import datetime, timezone, timedelta
@@ -25,101 +24,8 @@ def _read_version_file() -> str:
 VERSION = _read_version_file()
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
-# 上游版本文件（与仓库根目录 VERSION 同步发布）
-UPSTREAM_VERSION_URL = os.environ.get(
-    "HOT_CREATOR_VERSION_URL",
-    "https://raw.githubusercontent.com/zhahaonan/hot-creator/main/VERSION",
-)
-UPSTREAM_REPO_URL = os.environ.get(
-    "HOT_CREATOR_REPO_URL",
-    "https://github.com/zhahaonan/hot-creator",
-)
-VERSION_CHECK_CACHE = SKILL_ROOT / "output" / ".version_check_cache"
-
-
-def version_tuple(ver: str) -> tuple:
-    """Parse semver-ish string to tuple for compare (digits only per segment)."""
-    parts = []
-    for seg in ver.strip().split("."):
-        num = ""
-        for ch in seg:
-            if ch.isdigit():
-                num += ch
-            else:
-                break
-        parts.append(int(num) if num else 0)
-    while len(parts) < 3:
-        parts.append(0)
-    return tuple(parts[:4])
-
-
-def upstream_is_newer(local: str, remote: str) -> bool:
-    return version_tuple(remote) > version_tuple(local)
-
-
-def fetch_upstream_version(timeout: float = 3.0) -> str | None:
-    try:
-        import requests
-        r = requests.get(UPSTREAM_VERSION_URL.strip(), timeout=timeout)
-        if not r.ok:
-            return None
-        line = r.text.strip().splitlines()[0].strip()
-        if line and len(line) < 64 and line[0].isdigit():
-            return line
-    except Exception:
-        pass
-    return None
-
-
-def warn_if_newer_upstream(cache_hours: int = 24) -> None:
-    """
-    If local VERSION is older than upstream GitHub VERSION, print stderr hint.
-    Cached to avoid hitting GitHub on every script run. Disable: HOT_CREATOR_SKIP_UPDATE_CHECK=1
-    """
-    if os.environ.get("HOT_CREATOR_SKIP_UPDATE_CHECK", "").strip():
-        return
-    local = VERSION
-    now = time.time()
-    remote = None
-    try:
-        VERSION_CHECK_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass
-    if VERSION_CHECK_CACHE.exists():
-        try:
-            data = json.loads(VERSION_CHECK_CACHE.read_text(encoding="utf-8"))
-            checked = float(data.get("checked_at", 0))
-            if now - checked < cache_hours * 3600:
-                remote = data.get("remote")
-        except Exception:
-            pass
-    if remote is None:
-        remote = fetch_upstream_version()
-        try:
-            VERSION_CHECK_CACHE.write_text(
-                json.dumps({"checked_at": now, "remote": remote}, ensure_ascii=False),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
-    if not remote:
-        return
-    if upstream_is_newer(local, remote):
-        print(
-            "\n[hot-creator] —— 有新版本 ——\n"
-            f"  当前本地: {local}\n"
-            f"  上游仓库: {remote}\n"
-            f"  请在 skill 目录执行: git pull origin main\n"
-            f"  或重新安装: {UPSTREAM_REPO_URL}\n"
-            f"  跳过此提示: 环境变量 HOT_CREATOR_SKIP_UPDATE_CHECK=1\n"
-            f"  自建镜像: 设置 HOT_CREATOR_VERSION_URL / HOT_CREATOR_REPO_URL\n",
-            file=sys.stderr,
-        )
-
-
 # --- Platform registry ---
 # type: "hotlist" = 热门榜单（积累热度）, "realtime" = 实时新闻流（刚发生的）
-# column: 便于按领域筛选
 
 PLATFORMS = {
     # ── 热门榜单 (hotlist) ──
@@ -163,7 +69,6 @@ PLATFORMS = {
 }
 
 NEWSNOW_API = "https://newsnow.busiyi.world/api/s"
-
 OUTPUT_DIR = SKILL_ROOT / "output"
 
 
@@ -234,10 +139,7 @@ def format_material_item(item) -> str:
 
 
 def retry_request(fn, max_retries: int = 3, backoff: float = 1.0, on_fail: str = ""):
-    """
-    Retry a callable up to max_retries times with exponential backoff.
-    fn should be a zero-arg callable that may raise. Returns the result or raises.
-    """
+    """Retry a callable up to max_retries times with exponential backoff."""
     last_err = None
     for attempt in range(max_retries):
         try:
@@ -255,10 +157,7 @@ def retry_request(fn, max_retries: int = 3, backoff: float = 1.0, on_fail: str =
 
 
 def check_deps(packages: list[str]) -> list[str]:
-    """
-    Check if packages are importable. Returns list of missing package names.
-    Does NOT auto-install — caller decides what to do.
-    """
+    """Check if packages are importable. Returns list of missing package names."""
     missing = []
     for pkg in packages:
         import_name = pkg.split(">=")[0].split("==")[0].strip()
