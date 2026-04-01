@@ -24,9 +24,30 @@ AI_MODEL=deepseek/deepseek-chat  # optional, default
 
 Read `SKILL.md` — it contains the trigger table, tool index, and standard workflow.
 
+## Mode selection (REQUIRED before any execution)
+
+When the user triggers hot-creator (e.g. "help me find topics", "start my day", "what's trending"),
+**you MUST ask the user to choose a mode before running any script**:
+
+1. **Hotspot mode** — Pure trend analysis + creative briefs (no product info needed)
+2. **Product mode** — Product × trend content planning (requires product description)
+3. **Quick mode** — Just show trending rankings, no detailed briefs
+
+**Skip conditions** (intent is already clear):
+- User mentions a product name/description → go directly to product mode
+- User says "quick look" / "just rankings" → go directly to quick mode
+
+**Execution after selection**:
+
+| Mode | Command |
+|------|---------|
+| Hotspot | `python scripts/start_my_day.py --no-interactive` |
+| Product | Ask for product description → `python scripts/start_my_day.py --no-interactive --product-text "..."` |
+| Quick | `python scripts/collect_hotlist.py -o output/hotlist.json` → `python scripts/trend_analyze.py -i output/hotlist.json -o output/trends.json` |
+
 ## Standard workflow (must follow this order)
 
-### Basic (CLI one-command)
+### Basic (CLI one-command, has interactive menu)
 
 ```bash
 python scripts/start_my_day.py

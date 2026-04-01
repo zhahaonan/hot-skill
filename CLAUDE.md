@@ -27,6 +27,15 @@ cp config.example.yaml config.yaml
 
 读取 `SKILL.md` — 含工具索引、触发条件、标准工作流。
 
+## 模式选择（触发时必须先问）
+
+用户触发 hot-creator 时，**在执行任何脚本之前**，先问用户选哪种模式：
+1. **热点模式** → `start_my_day.py --no-interactive`
+2. **产品模式** → 追问产品描述 → `start_my_day.py --no-interactive --product-text "..."`
+3. **快速模式** → `collect_hotlist.py` + `trend_analyze.py`，不生成 brief
+
+用户已明确说了产品名或"快速看看"则跳过询问。
+
 ## 约定
 
 - 严格按 SKILL.md 的标准工作流执行：collect → analyze → **enrich** → brief → **verify** → export

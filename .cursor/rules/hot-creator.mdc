@@ -23,15 +23,39 @@ alwaysApply: true
 - `python scripts/*.py` — 所有工具脚本
 - `pip install -r requirements.txt` — 安装依赖
 
-## 首次交互：必须先问模式
+## 首次交互：必须先问模式（强制）
 
-当用户说"帮我做选题""开始今日选题"等，**先询问用户选择模式**，不要直接开始执行：
+当用户说"帮我做选题""开始今日选题""看看热点"等触发 hot-creator 时，**在执行任何脚本之前**，必须用 AskQuestion 工具让用户选择模式：
 
-- **热点模式** — 纯热点趋势分析 + 创作简报（不需要产品信息）
-- **产品模式** — 结合产品做热点内容策划（需要产品描述或已有画像）
-- **快速模式** — 只看热点排行，不生成详细简报
+```
+AskQuestion:
+  title: "HotCreator — 选择工作模式"
+  questions:
+    - id: "mode"
+      prompt: "请选择今天的工作模式"
+      options:
+        - id: "hotspot"
+          label: "🔥 热点模式 — 纯热点趋势分析 + 创作简报"
+        - id: "product"
+          label: "📦 产品模式 — 结合产品做热点内容策划（需提供产品信息）"
+        - id: "quick"
+          label: "⚡ 快速模式 — 只看热点排行，不生成详细简报"
+```
 
-用户明确说了"我的产品XXX结合热点"则直接进产品模式，无需再问。
+**跳过条件**（不需要问，直接执行）：
+- 用户消息中已明确包含产品名或产品描述 → 直接产品模式
+- 用户说"快速看看热点" → 直接快速模式
+- 用户说"只看排行" → 直接快速模式
+
+**选择后的执行路径**：
+
+| 用户选择 | Agent 执行 |
+|---------|-----------|
+| 热点模式 | `start_my_day.py --no-interactive` |
+| 产品模式 | 追问产品描述 → `start_my_day.py --no-interactive --product-text "..."` |
+| 快速模式 | `collect_hotlist.py` → `trend_analyze.py`，跳过 brief 和 export |
+
+产品模式选择后，如果 `config.yaml` 有 `product.default_profile`，提示用户是否复用；否则追问产品描述。
 
 ## 标准工作流
 
