@@ -22,15 +22,21 @@ alwaysApply: true
 
 - `python scripts/*.py` — 所有工具脚本
 - `pip install -r requirements.txt` — 安装依赖
-- `node scripts/cdp/*.mjs` — CDP 浏览器引擎
 
 ## 标准工作流
 
 ```
-collect_hotlist → trend_analyze → content_brief → export_*
+collect_hotlist → trend_analyze → enrich_topics → content_brief → export_*
 ```
 
-或一键：`python scripts/start_my_day.py`
+或一键基础版：`python scripts/start_my_day.py`
+
+**质量关键**：`enrich_topics` 步骤用 WebSearch 获取真实报道充实话题，大幅提升 brief 质量。
+
+## 社媒采集
+
+- 小红书/抖音/微博需要浏览器的采集：由 **web-access** skill 负责
+- hot-creator 的 `collect_social` / `monitor_competitor` 只做数据规范化，不做浏览器操作
 
 ## 执行约定
 

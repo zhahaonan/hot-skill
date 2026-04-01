@@ -46,3 +46,17 @@ graph:
 #   api_key: "sk-your-key"
 #   model: "deepseek/deepseek-chat"
 #   api_base: "https://api.deepseek.com/v1"
+
+# 模型分层策略 — 根据任务复杂度选择不同能力级别的模型
+# 探索/采集用快模型 → 分析/规划用中模型 → 验证用最强模型
+# Agent 框架层面由 Agent 调度（如 Cursor Task 的 model 参数）
+# model_tiers:
+#   explore: "fast"      # 采集、文件搜索、快速判断（Haiku 级）
+#   analyze: "default"   # 趋势分析、内容简报生成（Sonnet 级）
+#   verify:  "strong"    # 对抗性验证、质量审核（Opus 级）
+
+# 验证配置
+# verify:
+#   run_after_brief: true              # content_brief 后自动运行 verify
+#   suites: ["schema", "anti-hallucination"]  # 默认跑哪些检查套件
+#   fail_blocks_export: false          # 验证失败是否阻止导出

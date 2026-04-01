@@ -134,16 +134,18 @@ def load_brief_prompt() -> tuple[str, str]:
     return sys_prompt, user_prompt
 
 
-def call_ai(system_prompt: str, user_prompt: str, model: str, api_key: str, api_base: str = None) -> str:
+def call_ai(system_prompt: str, user_prompt: str, model: str, api_key: str, api_base: str = None,
+            batch_size: int = 1) -> str:
     """Call AI model via litellm."""
+    max_tokens = max(16000, min(64000, 16000 * batch_size))
     kwargs = {
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        "temperature": 0.5,
-        "max_tokens": 16000,
+        "temperature": 0.7,
+        "max_tokens": max_tokens,
     }
     if api_key:
         kwargs["api_key"] = api_key
@@ -214,38 +216,47 @@ def parse_ai_response(text: str) -> dict:
     return result
 
 
-PRODUCT_BRIEF_SYSTEM = """你是一个全平台内容策划专家，擅长将产品营销与热点趋势结合。你的每一条建议都必须紧密围绕用户的真实产品，不编造产品功能或特性。所有内容创意都要自然融合产品卖点和热点话题，避免生硬植入。"""
+PRODUCT_BRIEF_SYSTEM = """你是一个品牌内容策略师。你的工作是帮产品找到与热点之间的「真实连接」，而不是把产品硬塞进每个热点里。
 
-PRODUCT_BRIEF_USER = """## 任务
+你的判断标准：
+- 如果一个热点跟这个产品没关系，就直说「关联弱，不建议硬蹭」，给 product_relevance: low
+- 如果有关系，要说清楚关系到底是什么——是用户群体重叠？是解决了同一个痛点？是行业上下游？
+- 结合方式必须让用户看完觉得「哦这确实有关系」，而不是「这也太牵强了」
 
-基于以下产品信息和热点趋势，为每个热点生成"产品 x 热点"的深度内容方案。
+你绝不做的事：
+- 不编造产品没有的功能来凑热点
+- 不在每个热点里都提产品名——有些热点用「行业视角」比「产品视角」更合适
+- 不写「可以结合XX」这种废话——要写就写具体怎么结合、具体说什么话"""
 
-## 我的产品
+PRODUCT_BRIEF_USER = """## 我的产品
 
 {profile_json}
 
-## 热点趋势
+## 当前热点
 
 {trends_json}
 
-## 输出要求
+## 你的任务
 
-为每个热点话题输出以下内容，必须与产品深度结合：
+先判断每个热点跟我的产品有没有「真实连接」：
+- **high**: 产品直接相关（用户群体重叠/解决同一痛点/行业直接相关）→ 深入做
+- **medium**: 有间接关系（可以从行业角度/用户场景角度切入）→ 选择性做
+- **low**: 没什么关系 → 简单标注，不硬蹭
 
-1. **产品结合点**：这个热点如何与我的产品产生关联（必须真实、自然，不能硬蹭）
-2. **创作角度** (3-5个)：每个角度都要融入产品，说明产品在这个角度中扮演的角色
-3. **内容大纲**：短视频/图文/长文 大纲中要自然植入产品
-4. **标题建议** (5个)：可以含产品名或暗示产品，适配各平台
-5. **关键素材**：产品相关的可引用事实 + 热点相关素材
-6. **对标案例**：类似"品牌蹭热点"的成功案例
-7. **风险提示**：这个热点和产品结合有什么需要注意的（比如敏感话题不要蹭）
+对 high/medium 的话题：
+1. **结合点**：产品和这个热点的真实关系是什么（不是「都跟XX有关」这种废话）
+2. **角度**（1-2个深入的）：产品在这个角度里自然出现，不是硬塞
+3. **大纲**：只写最合适的形式，产品出现要自然（不是每句话都提）
+4. **素材**：产品相关的真实数据 + 热点相关素材
+5. **标题**：每平台 2 个
+6. **风险**：这个结合有没有翻车风险
 
 返回严格 JSON（不要 markdown 代码块）：
 
 {{
   "briefed_trends": [
     {{
-      "topic": "热点话题",
+      "topic": "话题",
       "score": 95,
       "direction": "rising",
       "category": "科技",
@@ -253,66 +264,77 @@ PRODUCT_BRIEF_USER = """## 任务
       "summary": "概要",
       "product_relevance": "high/medium/low",
       "brief": {{
-        "product_tie_in": "产品与热点的结合点描述",
+        "product_tie_in": "真实的结合点（low 的写「关联较弱，不建议硬蹭」）",
         "angles": [
           {{
-            "name": "角度名称",
-            "description": "切入点描述（含产品角色）",
-            "product_role": "产品在此角度中的定位",
-            "best_platform": "抖音",
-            "appeal": "高"
+            "name": "具体角度",
+            "description": "怎么做，产品怎么自然出现",
+            "product_role": "产品的角色",
+            "best_platform": "平台",
+            "appeal": "高/中/低"
           }}
         ],
         "outlines": {{
-          "short_video": {{
-            "hook": "开头hook（可含产品）",
-            "points": ["内容点（融合产品）"],
-            "cta": "引导关注/购买/了解"
-          }},
-          "xiaohongshu": {{
-            "cover_title": "封面标题",
-            "key_points": ["要点"],
-            "hashtags": ["#话题"]
-          }},
-          "article": {{
-            "title": "标题",
-            "intro": "引言",
-            "sections": ["章节"],
-            "conclusion": "结语（含产品）"
-          }}
+          "short_video": {{"hook": "", "beats": [{{"content": "", "visual": ""}}], "cta": ""}},
+          "xiaohongshu": {{"cover_title": "", "slides": [], "hashtags": []}},
+          "article": {{"title": "", "sections": [{{"heading": "", "core_point": ""}}]}}
         }},
-        "materials": ["素材"],
-        "titles": {{
-          "douyin": "抖音标题",
-          "xiaohongshu": "小红书标题",
-          "gongzhonghao": "公众号标题",
-          "zhihu": "知乎标题",
-          "bilibili": "B站标题"
+        "materials": {{
+          "data_points": [{{"fact": "", "source": "", "how_to_use": ""}}],
+          "sound_bites": [],
+          "sources": [{{"title": "", "url": "", "takeaway": ""}}]
         }},
-        "benchmarks": [
-          {{
-            "platform": "平台",
-            "brand": "品牌名",
-            "topic": "蹭的热点",
-            "metrics": "数据",
-            "reason": "成功原因"
-          }}
-        ],
-        "recommendation": {{
-          "best_format": "推荐形式",
-          "best_time": "最佳时间",
-          "platform_priority": ["平台排序"]
-        }},
-        "risk_notes": "注意事项/风险提示"
+        "titles": {{"douyin": [], "xiaohongshu": [], "gongzhonghao": [], "zhihu": [], "bilibili": []}},
+        "recommendation": {{"first_platform": "", "best_time": "", "trending_window": "", "platform_priority": []}},
+        "risk_notes": "风险提示"
       }}
     }}
   ]
-}}
+}}"""
 
-关键原则：
-- product_relevance 为 low 的话题也要输出，但标注让用户自行判断是否要做
-- product_tie_in 必须真实，不能编造产品没有的功能
-- 宁可说"这个热点与产品的直接关联较弱，建议从行业视角切入"也不要硬编"""
+
+def _build_context_block(trend: dict) -> str:
+    """Build a real-world context block for the AI prompt from enrichment data."""
+    ctx = trend.get("context")
+    if not ctx or not isinstance(ctx, dict):
+        return ""
+
+    parts = []
+    if ctx.get("background"):
+        parts.append(f"背景：{ctx['background']}")
+
+    for a in (ctx.get("articles") or [])[:5]:
+        line = f"- [{a.get('source', '报道')}] {a.get('title', '')}"
+        if a.get("summary"):
+            line += f" — {a['summary']}"
+        if a.get("url"):
+            line += f" ({a['url']})"
+        parts.append(line)
+
+    for dp in (ctx.get("data_points") or [])[:5]:
+        parts.append(f"- 数据：{dp}")
+
+    for q in (ctx.get("quotes") or [])[:3]:
+        parts.append(f"- 引用：「{q}」")
+
+    if ctx.get("controversy"):
+        parts.append(f"- 争议焦点：{ctx['controversy']}")
+
+    if not parts:
+        return ""
+    return "\n".join(parts)
+
+
+def _prepare_batch_for_prompt(batch: list[dict]) -> list[dict]:
+    """Prepare batch data for AI prompt, including context blocks."""
+    prepared = []
+    for t in batch:
+        entry = {k: v for k, v in t.items() if k != "context"}
+        ctx_block = _build_context_block(t)
+        if ctx_block:
+            entry["real_world_context"] = ctx_block
+        prepared.append(entry)
+    return prepared
 
 
 def process_batch(trends: list[dict], model: str, api_key: str, api_base: str = None,
@@ -324,6 +346,14 @@ def process_batch(trends: list[dict], model: str, api_key: str, api_base: str = 
     else:
         sys_prompt, user_template = load_brief_prompt()
 
+    has_context = any(t.get("context") for t in trends)
+    if has_context:
+        sys_prompt += (
+            "\n\n重要：部分话题附带了 real_world_context 字段，这是从真实报道中提取的背景、"
+            "数据点、引用和信源 URL。你必须优先使用这些真实信息来生成素材（data_points、quotes、"
+            "sources），不要编造。没有 context 的话题，用你的知识尽量给出具体信息。"
+        )
+
     all_briefed = []
 
     for i in range(0, len(trends), batch_size):
@@ -331,14 +361,17 @@ def process_batch(trends: list[dict], model: str, api_key: str, api_base: str = 
         batch_num = i // batch_size + 1
         total_batches = (len(trends) + batch_size - 1) // batch_size
 
+        enriched_count = sum(1 for t in batch if t.get("context"))
         mode_label = "product x trend" if profile else "generic"
+        ctx_label = f", {enriched_count} enriched" if enriched_count else ""
         print(
             f"[content_brief] Batch {batch_num}/{total_batches} "
-            f"({len(batch)} topics, {mode_label})...",
+            f"({len(batch)} topics{ctx_label}, {mode_label})...",
             file=sys.stderr
         )
 
-        trends_json = json.dumps(batch, ensure_ascii=False, indent=None)
+        prepared = _prepare_batch_for_prompt(batch)
+        trends_json = json.dumps(prepared, ensure_ascii=False, indent=None)
 
         if profile:
             profile_json = json.dumps(profile, ensure_ascii=False, indent=None)

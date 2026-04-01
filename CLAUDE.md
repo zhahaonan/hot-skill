@@ -10,7 +10,6 @@ allow: python scripts/*.py *
 allow: python -m py_compile *
 allow: pip install -r requirements.txt
 allow: uv pip install *
-allow: node scripts/cdp/*.mjs *
 ```
 
 ## 安装
@@ -30,8 +29,13 @@ cp config.example.yaml config.yaml
 
 ## 约定
 
-- 严格按 SKILL.md 的标准工作流执行：collect → analyze → brief → export
+- 严格按 SKILL.md 的标准工作流执行：collect → analyze → **enrich** → brief → **verify** → export
+- **enrich 步骤关键**：对 top 话题做 WebSearch 获取真实报道，传给 `enrich_topics.py`，再给 content_brief
+- **verify 步骤**：代码变更或 Pipeline 执行后运行 `verify.py`，对抗性检查工具链完整性
 - 不要用外部搜索 skill 替代 collect_hotlist
 - 不要自己分析替代 trend_analyze / content_brief（它们有完整的 AI prompt）
+- 社媒采集（小红书/抖音）由 web-access skill 的 CDP 负责，hot-creator 只做数据规范化
 - 中间 JSON 写 `output/`，传路径不传内容
 - `config.yaml` 含配置，不提交 git
+- **模型分层**：采集用快模型，分析用默认模型，验证用最强模型（详见 `reference/orchestration.md`）
+- **读写分离**：验证阶段始终只读；探索/规划阶段不需要写权限

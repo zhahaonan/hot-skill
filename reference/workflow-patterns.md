@@ -3,29 +3,33 @@
 > **何时加载此文件**：需要完整 CLI 命令示例时。
 > 每个 Pattern 都是可复制粘贴的命令序列。Agent 原生模式参考 `orchestration.md`。
 
-## Pattern 1: Full Pipeline — 完整流水线
+## Pattern 1: Full Pipeline — 完整流水线（高质量版）
 
-从采集到输出一气呵成，获得最完整的热点情报。
+从采集到输出一气呵成，获得最完整的热点情报。**Step 3 是质量关键。**
 
 ```
 Step 1 (parallel):
   python scripts/collect_hotlist.py --platforms weibo,douyin,zhihu,baidu -o hotlist.json
   python scripts/collect_rss.py -o rss.json
-  python scripts/collect_social.py --targets xiaohongshu,weibo_rising -o social.json
-  # 小红书站内关键词（CDP，勿用 WebSearch 替代）:
-  # node scripts/cdp/check.mjs
-  # python scripts/collect_social.py -t xiaohongshu -q 露营装备 -o xhs-search.json
+  # 社媒数据（如果有 web-access skill）:
+  # Agent 用 web-access CDP 浏览小红书/微博，提取数据
+  # echo '{"items":[...]}' | python scripts/collect_social.py -o social.json
 
 Step 2: Merge outputs
   Combine items arrays from hotlist.json + rss.json + social.json into merged.json
 
-Step 3:
+Step 3: Trend analysis
   python scripts/trend_analyze.py -i merged.json -o trends.json
 
-Step 4:
-  python scripts/content_brief.py -i trends.json --top 15 -o briefs.json
+Step 4: Enrich (CRITICAL for quality)
+  Agent WebSearches top 5-8 topics from trends.json
+  Collects real articles, data points, quotes, URLs
+  echo '{"trends":[...],"enrichments":[...]}' | python scripts/enrich_topics.py -o enriched.json
 
-Step 5 (parallel):
+Step 5:
+  python scripts/content_brief.py -i enriched.json --top 15 -o briefs.json
+
+Step 6 (parallel):
   python scripts/export_excel.py -i briefs.json -o report.xlsx
   python scripts/export_obsidian.py -i briefs.json --vault "C:/ObsidianVault"
   python scripts/export_mindmap.py -i briefs.json -o mindmap.html
@@ -78,15 +82,19 @@ Step 2-5: Same as Pattern 1
 ## Pattern 5: Social Media Focus — 社交媒体聚焦
 
 只采集社交媒体实时数据，用于捕捉 API 热榜可能遗漏的新兴趋势。
+社媒浏览由 web-access skill 负责，hot-creator 只做数据规范化。
 
 ```
-Step 1:
-  node scripts/cdp/check.mjs  # Ensure CDP ready
+Step 1: Agent uses web-access skill to browse
+  - Open xiaohongshu.com/explore via CDP, extract trending topics
+  - Open douyin.com/hot via CDP, extract hot list
+  - Open s.weibo.com/top/summary via CDP, extract rising trends
 
-Step 2:
-  python scripts/collect_social.py --targets xiaohongshu,douyin,weibo_rising -o social.json
+Step 2: Normalize
+  echo '{"items":[{"title":"话题1","platform_id":"xiaohongshu"},...]}'
+    | python scripts/collect_social.py -o social.json
 
-Step 3-5: Same as Pattern 1
+Step 3-6: Same as Pattern 1
 ```
 
 ## Pattern 6: Product x Trend — 产品 x 热点结合

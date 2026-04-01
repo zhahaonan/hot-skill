@@ -149,8 +149,6 @@ PLATFORMS = {
 }
 
 NEWSNOW_API = "https://newsnow.busiyi.world/api/s"
-CDP_PROXY_PORT = int(os.environ.get("CDP_PROXY_PORT", "3456"))
-CDP_PROXY_BASE = f"http://127.0.0.1:{CDP_PROXY_PORT}"
 
 OUTPUT_DIR = SKILL_ROOT / "output"
 
@@ -282,7 +280,8 @@ def write_json_output(data: dict, args):
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(text)
     else:
-        print(text)
+        sys.stdout.buffer.write(text.encode("utf-8"))
+        sys.stdout.buffer.write(b"\n")
 
 
 # --- CLI framework ---
@@ -379,7 +378,7 @@ def _error_hint(message: str) -> str:
     if "openpyxl" in msg:
         return "Run: pip install openpyxl"
     if "cdp" in msg or "chrome" in msg:
-        return "Ensure Chrome remote debugging is enabled and run: node scripts/cdp/check.mjs"
+        return "Browser operations are handled by the web-access skill, not hot-creator."
     if "timeout" in msg:
         return "Network timeout. Check connectivity or try a single platform first."
     if "json" in msg and ("parse" in msg or "decode" in msg):

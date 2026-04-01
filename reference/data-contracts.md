@@ -82,16 +82,23 @@ All collect tools output items in this format:
 
 ## collect_social
 
+**纯数据规范化器** — 不做任何浏览器操作。Agent 用 web-access skill 浏览社媒平台，提取数据后传给此工具规范化。
+
 **Input:**
 ```json
 {
-  "targets": ["xiaohongshu", "douyin", "weibo_rising"],
-  "xiaohongshu_search": "可选 — 小红书站内关键词；在发现页搜索框输入并回车，勿直接打开 search_result URL",
-  "search_query": "同上别名"
+  "items": [
+    {
+      "title": "话题标题",
+      "platform_id": "xiaohongshu",
+      "url": "https://...",
+      "heat": "1.2万",
+      "rank": 1
+    }
+  ],
+  "platform_id": "默认 platform_id（如果 items 中没有指定）"
 }
 ```
-
-**CDP：** 需 `node scripts/cdp/check.mjs`；代理支持 `GET /new?waitFor=` 与 `GET /wait` 等待 SPA 渲染（见 `reference/cdp-api.md`）。
 
 **Output:**
 ```json
@@ -101,6 +108,46 @@ All collect tools output items in this format:
   "errors": ["string"]
 }
 ```
+
+**反幻觉**：无 items 输入则输出空结果，绝不编造数据。
+
+## enrich_topics
+
+**话题充实器** — 将 Agent 的 WebSearch 结果合并到趋势数据中。这是提升 content_brief 输出质量的关键步骤。
+
+**Input:**
+```json
+{
+  "trends": [/* trend_analyze 输出 */],
+  "enrichments": [
+    {
+      "topic": "话题名（必须匹配 trends 中的 topic）",
+      "articles": [
+        {"title": "报道标题", "url": "https://...", "source": "36氪", "summary": "核心事实一句话"}
+      ],
+      "data_points": ["具体数字或统计"],
+      "quotes": ["相关人物的原话"],
+      "background": "2-3句话背景说明",
+      "controversy": "主要争议焦点"
+    }
+  ]
+}
+```
+
+**Output:**
+```json
+{
+  "trends": [/* 原始 trends + context 字段 */],
+  "enrichment_stats": {
+    "total_topics": 8,
+    "enriched_topics": 6,
+    "total_articles": 15,
+    "total_data_points": 12
+  }
+}
+```
+
+content_brief 会识别 `context` 字段，在 AI prompt 中注入真实报道信息，生成更具体、可验证的素材。
 
 ## trend_analyze
 

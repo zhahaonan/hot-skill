@@ -453,10 +453,31 @@ html, body {{
   0%, 100% {{ r: attr(r); opacity: 1; }}
   50% {{ opacity: 0.6; }}
 }}
+#load-error {{
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  background: #1a1a2e; color: #e0e0e0;
+  flex-direction: column; align-items: center; justify-content: center;
+  font-family: inherit; text-align: center; padding: 40px;
+}}
+#load-error h2 {{ font-size: 20px; margin-bottom: 16px; color: #ff6b6b; }}
+#load-error p {{ font-size: 14px; color: #999; line-height: 1.8; max-width: 480px; }}
+#load-error code {{ background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 4px; font-size: 13px; }}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+if (typeof d3 === "undefined") document.write('<script src="https://unpkg.com/d3@7/dist/d3.min.js"><\\/script>');
+</script>
+<script>
+if (typeof d3 === "undefined") document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"><\\/script>');
+</script>
 </head>
 <body>
+<div id="load-error">
+  <h2>D3.js failed to load</h2>
+  <p>The graph visualization requires the D3.js library, which could not be loaded from CDN.<br><br>
+  Please check your network connection and try opening this file in a browser with internet access.<br><br>
+  Or manually download D3.js and place <code>d3.min.js</code> next to this HTML file.</p>
+</div>
 <div class="title-bar">
   🔥 HotCreator · {date} 热点趋势图谱
   <div class="sub" id="stats"></div>
@@ -485,6 +506,10 @@ html, body {{
 <svg id="graph"></svg>
 
 <script>
+if (typeof d3 === "undefined") {{
+  document.getElementById("load-error").style.display = "flex";
+  throw new Error("D3.js not loaded");
+}}
 const DATA = {data_json};
 
 const width = window.innerWidth;

@@ -10,14 +10,34 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (
     VERSION,
+    base_argparser,
+    handle_schema,
     fetch_upstream_version,
     upstream_is_newer,
     UPSTREAM_REPO_URL,
     UPSTREAM_VERSION_URL,
 )
 
+SCHEMA = {
+    "name": "check_update",
+    "description": "Compare local VERSION with upstream GitHub. Exit 1 if newer available.",
+    "input": {"type": "object", "properties": {}},
+    "output": {
+        "type": "object",
+        "properties": {
+            "local": {"type": "string"},
+            "remote": {"type": "string"},
+            "newer_available": {"type": "boolean"}
+        }
+    },
+}
+
 
 def main():
+    parser = base_argparser("Compare local VERSION with upstream GitHub")
+    args = parser.parse_args()
+    handle_schema(args, SCHEMA)
+
     if os.environ.get("HOT_CREATOR_SKIP_UPDATE_CHECK", "").strip():
         print("HOT_CREATOR_SKIP_UPDATE_CHECK is set, skip.", file=sys.stderr)
         sys.exit(0)
