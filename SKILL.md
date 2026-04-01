@@ -1,6 +1,6 @@
 ---
 name: hot-creator
-version: "5.2.0"
+version: "5.3.0"
 description: 产品 x 热点内容策划工具 — 采集全网热点，结合你的产品生成完整创作方案
 user-invocable: true
 metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-creator", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
@@ -96,9 +96,14 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 - 一句话概要
 - 注意 `platform_updated_at` 和 `source_type` 判断时效性
 
+**时间标签（必须包含）**：
+- `collected_at`: 采集时间（ISO 8601 格式，如 2026-04-01T14:30:00+08:00）
+- 每条趋势的 `hot_window`: 热度窗口期（如 "4月1日 14:00 - 4月2日 10:00"）
+
 输出格式：
 ```json
 {
+  "collected_at": "2026-04-01T14:30:00+08:00",
   "trends": [
     {
       "topic": "话题名（≤20字）",
@@ -108,6 +113,7 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
       "platforms": ["微博", "知乎"],
       "platform_count": 2,
       "summary": "一句话概要（≤50字）",
+      "hot_window": "4月1日 14:00 - 4月2日 10:00",
       "is_emerging": false
     }
   ]
@@ -158,18 +164,49 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 
 输出规范参考 `reference/prompt-templates.md` 的 `## content_brief` 章节。
 
-#### 每个完整方案包含
+#### 每个完整方案包含（必须全部填写，不可留空）
+
+**以下每个字段都必须填写具体内容，不能是空字符串或空数组：**
 
 1. **产品结合点** — 你的产品跟这个热点的真实连接（第一优先判断）
-2. **创作角度**（1-2个）— 具体角度名 + 完整执行步骤 + 产品角色 + 最适合平台
-3. **短视频脚本** — hook + 逐句口播 + 画面描述 + CTA
-4. **小红书图文** — 封面标题 + 每页内容 + 话题标签
-5. **长文大纲** — 标题 + 每章节论点/论据/植入点
-6. **素材清单** — 数据点 + 口播金句 + 封面文字 + 信源URL
-7. **平台标题** — 抖音/小红书/公众号/知乎/B站各 2 个
-8. **发布建议** — 首发平台 + 最佳时间 + 热度窗口期（**必须填写**，思维导图需要）
+   - 必须写清楚：产品哪个功能/卖点/用户场景与热点相关
+   - 示例：`"产品是一款AI写作工具，热点是'ChatGPT新功能'，结合点是：用户用ChatGPT新功能时遇到的XX问题，正好我们的XX功能可以解决"`
 
-> **关键**：`brief.recommendation.first_platform` 和 `brief.angles` 必须填写，否则思维导图会显示空白。
+2. **创作角度**（1-2个）— 必须包含：
+   - `name`: 具体角度名（可直接当标题用）
+   - `description`: 完整执行步骤（第一步做什么、第二步做什么、产品怎么出现）
+   - `product_role`: 产品在此内容中的具体角色
+   - `best_platform`: 最适合平台
+   - `appeal`: 吸引力评估（高/中/低）
+
+3. **短视频脚本** — 必须包含：
+   - `hook`: 开头第一句完整话术（15字内）
+   - `beats`: 4-6个节拍，每个包含完整口播内容（30-60字）+ 画面描述
+   - `cta`: 结尾引导语
+
+4. **小红书图文** — 必须包含：
+   - `cover_title`: 封面大字（含emoji）
+   - `slides`: 6-8张图，每张含标题+正文内容+配图建议
+   - `hashtags`: 8-10个标签
+
+5. **长文大纲** — 必须包含：
+   - `title`: 公众号标题
+   - `sections`: 4-5个章节，每章含heading、core_point、evidence、product_mention
+
+6. **素材清单** — 必须包含（每类至少3条）：
+   - `data_points`: 含数字的事实 + 来源
+   - `sound_bites`: 8-18字口播金句
+   - `screenshot_lines`: ≤14字封面/字幕文字
+   - `sources`: 信源（标题 + URL）
+
+7. **平台标题** — 抖音/小红书/公众号/知乎/B站各 2 个
+
+8. **发布建议** — 必须包含：
+   - `first_platform`: 首发平台（思维导图必填）
+   - `best_time`: 最佳发布时间
+   - `trending_window`: 热度窗口期
+
+> **关键**：如果某个字段留空，导出的 MD 文档和思维导图就会显示空白。用户要的是"拿来就能发"的完整内容，不是框架和方向建议。
 
 ### Step 4 — 必须执行全部 2 个导出（不可跳过）
 
