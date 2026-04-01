@@ -1,6 +1,6 @@
 ---
 name: hot-creator
-version: "5.3.0"
+version: "5.4.0"
 description: 产品 x 热点内容策划工具 — 采集全网热点，结合你的产品生成完整创作方案
 user-invocable: true
 metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-creator", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
@@ -23,32 +23,41 @@ pip install -r requirements.txt
 
 ## 强制执行流程
 
-### Step 0 — 获取产品/品牌信息（必须先做）
+### Step 0 — 获取产品/品牌/用户画像（必须先做）
 
-**这是第一步，没有产品信息无法生成内容方案。**
+**这是第一步，没有画像信息无法生成内容方案。**
+
+**适用对象**：
+- **企业/品牌**：提供产品描述、品牌介绍、产品文档
+- **个人创作者**：提供个人定位、内容方向、粉丝画像、账号简介
 
 获取方式：
-1. **用户消息中已包含产品描述** → Agent 直接提取产品画像
+1. **用户消息中已包含描述** → Agent 直接提取画像
 2. **用户提供了 PDF/文档路径** → 用子智能体提取文本，Agent 再提取画像
    ```bash
-   python {baseDir}/scripts/product_profile.py --file <路径> --extract-only -o output/product-raw.txt
+   python {baseDir}/scripts/product_profile.py --file <路径> -o output/profile-raw.txt
    ```
-   然后 Agent 读取 `output/product-raw.txt`，提取结构化产品画像
-3. **都没有** → 追问用户："你的产品/品牌是什么？请提供产品描述或介绍文档"
+   然后 Agent 读取 `output/profile-raw.txt`，提取结构化画像
+3. **都没有** → 追问用户："请提供你的产品/品牌/个人账号介绍，或告诉我你的内容定位和目标受众"
 
-**Agent 提取的产品画像格式**（参考 `reference/prompt-templates.md` 的 product_profile 章节）：
+**Agent 提取的画像格式**（参考 `reference/prompt-templates.md` 的 product_profile 章节）：
 ```json
 {
-  "name": "产品/品牌名称",
-  "category": "产品类别",
+  "name": "产品/品牌/账号名称",
+  "type": "product/brand/creator",
+  "category": "类别",
   "one_liner": "一句话描述",
   "target_audience": ["目标人群1", "目标人群2"],
-  "usps": ["核心卖点1", "核心卖点2"],
+  "usps": ["核心卖点/特色1", "核心卖点/特色2"],
   "keywords": ["关键词1", "关键词2"],
-  "industry": "所在行业",
-  "tone": "品牌调性"
+  "industry": "所在行业/领域",
+  "tone": "品牌调性/内容风格",
+  "platforms": ["主要运营平台"],
+  "content_direction": ["内容方向1", "内容方向2"]
 }
 ```
+
+> **注意**：获取画像后，后续步骤直接生成全部内容，不再询问用户。用户要的是"拿来就能发"的成品。
 
 ### Step 1 — 采集热点
 
