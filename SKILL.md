@@ -1,6 +1,6 @@
 ---
 name: hot-creator
-version: "5.6.0"
+version: "5.7.0"
 description: 产品 x 热点内容策划工具 — 采集全网热点，结合你的产品生成完整创作方案
 user-invocable: true
 metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-skill", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
@@ -20,38 +20,6 @@ pip install -r requirements.txt
 ## 触发条件
 
 用户意图涉及：热点、趋势、选题、内容创作、热搜、爆款、创作灵感、产品推广、蹭热点
-
----
-
-## 执行模式（用户可选）
-
-### Fast 模式 — 快速灵感（默认）
-
-**适用场景**：日常快速选题、只需几个方向、时间紧迫
-
-**流程**：
-1. Step 0：获取画像（必须有）
-2. Step 1：采集热点（5-10 个平台即可）
-3. Step 2：分析趋势（输出 10-15 条）
-4. Step 3：只输出 **3-5 个高相关话题**，每个只给：
-   - 产品结合点
-   - 1 个最佳创作角度 + 标题
-   - 1 篇完整成稿（短视频脚本 OR 小红书图文，二选一）
-5. Step 4：只导出 Obsidian .md（跳过思维导图）
-
-**触发词**：`"快速来几个选题"` / `"今天有啥可写的"` / 用户没指定模式时默认
-
----
-
-### Full 模式 — 完整工作流
-
-**适用场景**：周度规划、内容矩阵搭建、需要完整素材库
-
-**流程**：完整执行 Step 0-5，输出全部内容（见下文）
-
-**触发词**：`"完整分析"` / `"我要全套方案"` / `"生成完整内容矩阵"`
-
----
 
 ## 强制执行流程
 
@@ -98,11 +66,11 @@ pip install -r requirements.txt
 用 **Task 子智能体** 执行采集脚本，只取回文件路径：
 
 ```bash
-# Fast 模式：只采集主流平台
-python {baseDir}/scripts/collect_hotlist.py --platforms weibo,douyin,zhihu,bilibili,weixin -o output/hotlist.json
-
-# Full 模式：热门榜单（默认 29 个平台）
+# 热门榜单（默认 29 个平台）
 python {baseDir}/scripts/collect_hotlist.py -o output/hotlist.json
+
+# 或指定平台
+python {baseDir}/scripts/collect_hotlist.py --platforms weibo,douyin,zhihu -o output/hotlist.json
 
 # 同时采集实时新闻流
 python {baseDir}/scripts/collect_hotlist.py --type all -o output/all.json
@@ -345,14 +313,12 @@ python {baseDir}/scripts/collect_hotlist.py --type all -o output/all.json
 
 ---
 
-### Step 4 — 导出（按模式执行）
+### Step 4 — 必须执行全部 2 个导出（不可跳过）
 
-**Fast 模式**：只执行 obsidian 导出
-```bash
-python {baseDir}/scripts/export_obsidian.py -i output/briefs.json --vault .
-```
+**这两个导出是用户最终需要的输出，必须全部执行。**
 
-**Full 模式**：两个导出全部执行
+用 Task 子智能体并行执行：
+
 ```bash
 # 1. Obsidian Markdown 笔记
 python {baseDir}/scripts/export_obsidian.py -i output/briefs.json --vault .
@@ -364,7 +330,7 @@ python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindm
 **输出文件**：
 - `HotCreator/{date}/_Dashboard.md` — 每日概览
 - `HotCreator/{date}/Topics/*.md` — 各话题详细笔记
-- `output/mindmap.html` — 交互式关系图谱（Full 模式）
+- `output/mindmap.html` — 交互式关系图谱
 
 ---
 
@@ -383,11 +349,11 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 | Step | 自检项 | 不符合时的处理 |
 |------|--------|---------------|
 | Step 0 | 画像是否包含 name, type, target_audience, usps | 重新提取缺失字段 |
-| Step 1 | 采集数量是否 ≥ 50 条（Full）或 ≥ 20 条（Fast） | 尝试更多平台或检查网络 |
+| Step 1 | 采集数量是否 ≥ 50 条 | 尝试更多平台或检查网络 |
 | Step 2 | trends 数量是否 ≥ 10 条，每条是否有 summary, hot_window | 补充缺失字段 |
 | Step 2.5 | Top 5 热点是否获取了全文或 context | 用 WebFetch/WebSearch 补充 |
 | Step 3 | 每个方案是否通过相关性评分，所有字段是否填写 | 重新评分，补充空白字段 |
-| Step 4 | 导出是否成功 | 检查错误日志重试 |
+| Step 4 | 两个导出是否都成功 | 检查错误日志重试 |
 
 **自检时机**：每完成一个 Step，立即检查输出文件，确认无误后再进入下一步。
 
@@ -424,7 +390,6 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 - "补充话题 X 的短视频脚本"
 - "这个产品结合点不对，换成 XX 角度"
 - "Top 3 热点没有获取全文，去获取一下"
-- "切换到 Fast 模式" / "切换到 Full 模式"
 
 ---
 
@@ -508,10 +473,10 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 ## Harness 模式约定
 
 1. **Step 0 必须先执行** — 没有产品信息无法生成内容方案
-2. **Fast/Full 模式根据用户意图自动选择**
-3. **采集类脚本用 Task 子智能体执行**，只返回文件路径和摘要，不返回完整数据
-4. **中间 JSON 写 `output/`**，传路径不传内容
-5. **Agent 自己做 Step 2 和 Step 3 的 AI 分析**，参考 `reference/prompt-templates.md`
-6. **相关性评分必须执行**，低于阈值不生成内容
-7. **Fallback 模式自动触发**，无合适热点时不卡死
+2. **采集类脚本用 Task 子智能体执行**，只返回文件路径和摘要，不返回完整数据
+3. **中间 JSON 写 `output/`**，传路径不传内容
+4. **Agent 自己做 Step 2 和 Step 3 的 AI 分析**，参考 `reference/prompt-templates.md`
+5. **相关性评分必须执行**，低于阈值不生成内容
+6. **Fallback 模式自动触发**，无合适热点时不卡死
+7. **Step 4 的 2 个 export 脚本必须全部执行**，用子智能体并行
 8. 分析趋势时注意 `platform_updated_at` 和 `source_type` 字段判断时效性
