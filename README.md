@@ -52,11 +52,14 @@ Agent 从用户描述或 PDF 文档中提取结构化画像，包含：name, typ
 ### Step 2 — 分析趋势
 Agent 自动去重、评分、分类，输出 `output/trends.json`。
 
-### Step 2.5 — 获取全文（强烈建议）
+### Step 2.5 — 相关性评分（必须先做）
+Agent 对每个热点做产品相关性评分（总分 100），只为 high/medium 话题生成内容，避免硬蹭。
+
+### Step 2.6 — 获取全文（强烈建议）
 用 WebFetch/WebSearch 获取热点原文，补充完整上下文。
 
-### Step 3 — 生成内容方案
-基于相关性评分，只对相关热点生成完整内容方案，输出 `output/briefs.json`。
+### Step 3 — 内容方案
+只为 high/medium 相关话题生成完整内容方案，输出 `output/briefs.json`。
 
 ### Step 4 — 导出文件
 - `HotCreator/{date}/_Dashboard.md` — 每日概览
