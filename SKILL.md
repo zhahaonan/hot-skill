@@ -333,7 +333,9 @@ python {baseDir}/scripts/collect_hotlist.py --type all -o output/all.json
 
 ### Step 4 — 必须执行全部 2 个导出（不可跳过）
 
-**这两个导出是用户最终需要的输出，必须全部执行。**
+**⚠️ 这是用户最终需要的输出，必须执行，绝对不可跳过。**
+
+**即使你觉得内容已经足够，也必须执行导出，因为用户需要的是文件而不是对话输出。**
 
 用 Task 子智能体并行执行：
 
@@ -344,6 +346,11 @@ python {baseDir}/scripts/export_obsidian.py -i output/briefs.json --vault .
 # 2. D3 力导向思维导图
 python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindmap.html
 ```
+
+**注意**：
+- 输入文件是 `output/briefs.json`（Agent 自己生成的）
+- 导出脚本会读取 `briefed_trends` 字段
+- 如果导出失败，检查错误日志并重试，不要跳过
 
 **输出文件**：
 - `HotCreator/{date}/_Dashboard.md` — 每日概览
@@ -497,5 +504,6 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 4. **Agent 自己做 Step 2 和 Step 3 的 AI 分析**，参考 `reference/prompt-templates.md`
 5. **Step 2.5 相关性评分必须执行**，低于阈值不生成内容，避免硬蹭
 6. **Fallback 模式自动触发**，无合适热点时不卡死
-7. **Step 4 的 2 个 export 脚本必须全部执行**，用子智能体并行
+7. **⚠️ Step 4 的 2 个导出脚本必须全部执行**，这是用户最终需要的输出，不可跳过
 8. 分析趋势时注意 `platform_updated_at` 和 `source_type` 字段判断时效性
+9. **导出失败时检查错误并重试，不要静默跳过**
