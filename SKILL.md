@@ -1,9 +1,9 @@
 ---
 name: hot-creator
-version: "5.5.0"
+version: "5.6.0"
 description: 产品 x 热点内容策划工具 — 采集全网热点，结合你的产品生成完整创作方案
 user-invocable: true
-metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-creator", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
+metadata: {"openclaw": {"emoji": "🔥", "homepage": "https://github.com/zhahaonan/hot-skill", "requires": {"anyBins": ["python3", "python"]}, "install": [{"id": "pip", "kind": "node", "label": "Install deps", "bins": ["python"]}]}}
 ---
 
 # hot-creator
@@ -20,6 +20,38 @@ pip install -r requirements.txt
 ## 触发条件
 
 用户意图涉及：热点、趋势、选题、内容创作、热搜、爆款、创作灵感、产品推广、蹭热点
+
+---
+
+## 执行模式（用户可选）
+
+### Fast 模式 — 快速灵感（默认）
+
+**适用场景**：日常快速选题、只需几个方向、时间紧迫
+
+**流程**：
+1. Step 0：获取画像（必须有）
+2. Step 1：采集热点（5-10 个平台即可）
+3. Step 2：分析趋势（输出 10-15 条）
+4. Step 3：只输出 **3-5 个高相关话题**，每个只给：
+   - 产品结合点
+   - 1 个最佳创作角度 + 标题
+   - 1 篇完整成稿（短视频脚本 OR 小红书图文，二选一）
+5. Step 4：只导出 Obsidian .md（跳过思维导图）
+
+**触发词**：`"快速来几个选题"` / `"今天有啥可写的"` / 用户没指定模式时默认
+
+---
+
+### Full 模式 — 完整工作流
+
+**适用场景**：周度规划、内容矩阵搭建、需要完整素材库
+
+**流程**：完整执行 Step 0-5，输出全部内容（见下文）
+
+**触发词**：`"完整分析"` / `"我要全套方案"` / `"生成完整内容矩阵"`
+
+---
 
 ## 强制执行流程
 
@@ -59,25 +91,21 @@ pip install -r requirements.txt
 
 > **注意**：获取画像后，后续步骤直接生成全部内容，不再询问用户。用户要的是"拿来就能发"的成品。
 
+---
+
 ### Step 1 — 采集热点
 
 用 **Task 子智能体** 执行采集脚本，只取回文件路径：
 
 ```bash
-# 热门榜单（默认 29 个平台）
+# Fast 模式：只采集主流平台
+python {baseDir}/scripts/collect_hotlist.py --platforms weibo,douyin,zhihu,bilibili,weixin -o output/hotlist.json
+
+# Full 模式：热门榜单（默认 29 个平台）
 python {baseDir}/scripts/collect_hotlist.py -o output/hotlist.json
 
-# 或指定平台
-python {baseDir}/scripts/collect_hotlist.py --platforms weibo,douyin,zhihu -o output/hotlist.json
-
 # 同时采集实时新闻流
-python {baseDir}/scripts/collect_hotlist.py --type realtime -o output/realtime.json
-
-# 全部（热门+实时）
 python {baseDir}/scripts/collect_hotlist.py --type all -o output/all.json
-
-# RSS 订阅（可选）
-python {baseDir}/scripts/collect_rss.py -o output/rss.json
 ```
 
 **子智能体返回格式**：
@@ -90,6 +118,8 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 ```
 
 **每条 item 保留上游字段**：title, platform, rank, url, heat, snippet, published_at, platform_updated_at, source_type
+
+---
 
 ### Step 2 — Agent 分析趋势
 
@@ -129,6 +159,8 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 }
 ```
 
+---
+
 ### Step 2.5 — 强烈建议：Web 增强获取全文
 
 **这一步对内容质量至关重要，强烈建议执行。**
@@ -159,19 +191,75 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 
 **没有全文会导致**：内容方案缺乏真实细节，AI 只能泛泛而谈。
 
+---
+
 ### Step 3 — Agent 生成完整创作方案
 
 **Agent 读取 trends.json + 产品画像，自己做内容生成**，输出写入 `output/briefs.json`。
 
 **核心原则：只对真正相关的热点生成内容，不强凑。**
 
-#### 关联度判断标准
+---
 
-| 级别 | 判断标准 | 输出要求 |
-|------|----------|----------|
-| **high** | 用户群体直接重叠 / 解决同一痛点 / 行业直接相关 | 完整内容方案 |
-| **medium** | 可从行业视角 / 用户场景 / 价值观角度切入 | 完整内容方案，需加过渡逻辑 |
-| **low** | 没有真实连接点 | 只写一句原因，**不生成内容** |
+#### 相关性评分框架（必须执行）
+
+每个热点必须通过以下 5 维评分，总分 ≥ 6 分才生成内容：
+
+| 维度 | 分值 | 评分标准 |
+|------|------|----------|
+| **用户人群重叠度** | 0-2 | 2=直接重叠 / 1=部分重叠 / 0=无重叠 |
+| **情绪共鸣强度** | 0-2 | 2=强情绪触发 / 1=有情绪点 / 0=无情绪 |
+| **产品功能承接度** | 0-2 | 2=直接解决痛点 / 1=间接相关 / 0=无关 |
+| **平台传播适配度** | 0-2 | 2=天然适合短视频/图文 / 1=需要改编 / 0=不适合 |
+| **风险等级** | 0-2 | 2=无风险 / 1=需谨慎 / 0=敏感话题直接过滤 |
+
+**评分结果处理**：
+- **≥ 8 分**：high 相关 → 完整内容方案
+- **6-7 分**：medium 相关 → 完整方案，需加过渡逻辑
+- **< 6 分**：low 相关 → 只写一句原因，**不生成内容**
+
+**输出格式**：
+```json
+{
+  "topic": "话题名",
+  "relevance_score": {
+    "audience_overlap": 2,
+    "emotion_resonance": 1,
+    "product_fit": 2,
+    "platform_fit": 2,
+    "risk_level": 2,
+    "total": 9,
+    "level": "high"
+  }
+}
+```
+
+---
+
+#### 热点不适配时的 Fallback 模式
+
+**如果所有热点相关性评分 < 6 分**，执行 Fallback：
+
+```
+当热榜无合适切入点时，自动切换为「行业趋势 + 用户情绪 + Evergreen」模式：
+
+1. **行业趋势**（从产品所在行业切入）：
+   - 用 WebSearch 搜索 "{industry} 趋势 2024" 或 "{industry} 用户痛点"
+   - 生成 2-3 个行业视角的内容方案
+
+2. **用户情绪**（从目标用户痛点切入）：
+   - 基于画像中的 target_audience，思考他们当下的焦虑/期待
+   - 生成 2-3 个情绪共鸣型内容方案
+
+3. **Evergreen 议题**（长期有效的选题）：
+   - 教程类：如何解决 XX 问题
+   - 清单类：XX 个工具/方法推荐
+   - 观点类：对 XX 现象的看法
+```
+
+**Fallback 输出说明**：Agent 要明确告诉用户"今日热榜与产品相关性低，已切换为行业/情绪/长青模式"。
+
+---
 
 #### 真实性约束（必须遵守）
 
@@ -181,14 +269,24 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
    - 产品资料
    - **禁止编造**任何数字、引语、报道
 
-2. **内容数量**：完整内容方案通常 5-8 个（只对 high/medium 话题），不是越多越好
+2. **事实标记**：每条素材必须标记类型：
+   - `fact`: 有明确来源的事实（必须带 source_url）
+   - `inference`: 基于事实的合理推断
+   - `suggestion`: 建议/观点（无需来源）
 
-3. **质量标准**：
+3. **时效降权**：热点超过以下时间自动降权：
+   - 超过 6 小时：score -10
+   - 超过 12 小时：score -20
+   - 超过 24 小时：不作为热点处理
+
+4. **质量标准**：
    - 每个方案必须有真实的"产品-热点"连接点
    - 素材清单每条都要有来源标注
    - 不确定的信息标注"需核实"
 
 输出规范参考 `reference/prompt-templates.md` 的 `## content_brief` 章节。
+
+---
 
 #### 每个完整方案包含（必须全部填写，不可留空）
 
@@ -220,10 +318,21 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
    - `sections`: 4-5个章节，每章含heading、core_point、evidence、product_mention
 
 6. **素材清单** — 必须包含（每类至少3条）：
-   - `data_points`: 含数字的事实 + 来源
-   - `sound_bites`: 8-18字口播金句
-   - `screenshot_lines`: ≤14字封面/字幕文字
-   - `sources`: 信源（标题 + URL）
+   ```json
+   {
+     "data_points": [
+       {"content": "XX功能上线3天，用户增长50%", "type": "fact", "source_url": "https://..."},
+       {"content": "预计将继续增长", "type": "inference", "source_url": null}
+     ],
+     "sound_bites": [
+       {"content": "这个功能绝了", "type": "suggestion"}
+     ],
+     "screenshot_lines": ["3天增长50%", "用户实测"],
+     "sources": [
+       {"title": "报道标题", "url": "https://..."}
+     ]
+   }
+   ```
 
 7. **平台标题** — 抖音/小红书/公众号/知乎/B站各 2 个
 
@@ -234,28 +343,38 @@ python {baseDir}/scripts/collect_rss.py -o output/rss.json
 
 > **关键**：如果某个字段留空，导出的 MD 文档和思维导图就会显示空白。用户要的是"拿来就能发"的完整内容，不是框架和方向建议。
 
-### Step 4 — 必须执行全部 2 个导出（不可跳过）
+---
 
-**这两个导出是用户最终需要的输出，必须全部执行，不能跳过任何一个。**
+### Step 4 — 导出（按模式执行）
 
-用 Task 子智能体并行执行：
-
+**Fast 模式**：只执行 obsidian 导出
 ```bash
-# 1. Obsidian Markdown 笔记（用户在笔记软件中查看）
+python {baseDir}/scripts/export_obsidian.py -i output/briefs.json --vault .
+```
+
+**Full 模式**：两个导出全部执行
+```bash
+# 1. Obsidian Markdown 笔记
 python {baseDir}/scripts/export_obsidian.py -i output/briefs.json --vault .
 
-# 2. D3 力导向思维导图（用户在浏览器中可视化查看）
+# 2. D3 力导向思维导图
 python {baseDir}/scripts/export_mindmap.py -i output/briefs.json -o output/mindmap.html
 ```
 
 **输出文件**：
 - `HotCreator/{date}/_Dashboard.md` — 每日概览
 - `HotCreator/{date}/Topics/*.md` — 各话题详细笔记
-- `output/mindmap.html` — 交互式关系图谱
+- `output/mindmap.html` — 交互式关系图谱（Full 模式）
+
+---
 
 ### Step 5 — 告知用户结果
 
 告诉用户生成了哪些文件及路径，简要总结 top 3 话题的创作方向。
+
+**如果是 Fallback 模式**：明确说明"今日热榜与产品相关性低，已切换为行业/情绪/长青模式"。
+
+---
 
 ## 模型漂移自检（每步执行）
 
@@ -264,13 +383,15 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 | Step | 自检项 | 不符合时的处理 |
 |------|--------|---------------|
 | Step 0 | 画像是否包含 name, type, target_audience, usps | 重新提取缺失字段 |
-| Step 1 | 采集数量是否 ≥ 50 条 | 尝试更多平台或检查网络 |
+| Step 1 | 采集数量是否 ≥ 50 条（Full）或 ≥ 20 条（Fast） | 尝试更多平台或检查网络 |
 | Step 2 | trends 数量是否 ≥ 10 条，每条是否有 summary, hot_window | 补充缺失字段 |
 | Step 2.5 | Top 5 热点是否获取了全文或 context | 用 WebFetch/WebSearch 补充 |
-| Step 3 | 每个方案 12 个字段是否全部填写 | 补充空白字段 |
-| Step 4 | 两个导出是否都成功 | 检查错误日志重试 |
+| Step 3 | 每个方案是否通过相关性评分，所有字段是否填写 | 重新评分，补充空白字段 |
+| Step 4 | 导出是否成功 | 检查错误日志重试 |
 
 **自检时机**：每完成一个 Step，立即检查输出文件，确认无误后再进入下一步。
+
+---
 
 ## 用户检查与修正
 
@@ -303,6 +424,50 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 - "补充话题 X 的短视频脚本"
 - "这个产品结合点不对，换成 XX 角度"
 - "Top 3 热点没有获取全文，去获取一下"
+- "切换到 Fast 模式" / "切换到 Full 模式"
+
+---
+
+## 平台差异化模板
+
+不同平台的内容风格差异很大，Agent 生成内容时必须遵循：
+
+### 抖音/短视频
+- **开头**：3秒内必须出 hook，用反问/悬念/冲突开场
+- **句长**：每句 10-20 字，口语化
+- **节奏**：每 5-7 秒一个信息点
+- **CTA**：引导点赞/评论/关注，不要硬广
+- **敏感表达**：避免"第一""最""绝对"等极限词
+
+### 小红书
+- **封面**：大字标题 + emoji + 数字
+- **正文**：分段清晰，每段 2-3 句，多用 emoji
+- **语气**：闺蜜分享感，避免说教
+- **标签**：8-10 个，包含 1-2 个热门标签
+- **敏感表达**：避免医疗功效宣称、过度营销
+
+### 公众号
+- **标题**：15-25 字，可设悬念/反差
+- **正文**：1500-3000 字，结构化分段
+- **语气**：专业但不晦涩，有观点
+- **产品植入**：自然融入，不生硬
+- **敏感表达**：避免政治敏感、舆论操控
+
+### 知乎
+- **开头**：先抛观点，再用数据/案例支撑
+- **正文**：逻辑清晰，分点论述
+- **语气**：专业理性，避免情绪化
+- **产品植入**：作为解决方案出现，非广告
+- **敏感表达**：避免站队敏感话题
+
+### B站
+- **开头**：可玩梗，快速建立人设
+- **正文**：有深度，可长视频逻辑
+- **语气**：年轻化，可吐槽可认真
+- **CTA**：一键三连，弹幕互动
+- **敏感表达**：避免低俗、引战
+
+---
 
 ## 支持平台
 
@@ -311,6 +476,8 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 **实时新闻流 (8 源)**：联合早报, 华尔街见闻快讯, 36氪快讯, 财联社电报, IT之家, 格隆汇, 金十数据, 法布财经
 
 > 数据源来自 [NewsNow](https://newsnow.busiyi.world/)
+
+---
 
 ## 工具索引
 
@@ -324,6 +491,8 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 
 > `python {baseDir}/scripts/<tool>.py --schema` 查看接口定义。
 
+---
+
 ## 自修复
 
 | 故障 | 自修复行为 |
@@ -332,14 +501,17 @@ Agent 在每个 Step 执行后，必须自检是否符合预期：
 | 依赖未安装 | `ensure_deps()` 自动 pip install |
 | 单个 export 失败 | 不影响其他 export，继续执行 |
 | 采集全失败 | 用 collect_rss 替代 |
+| 无相关热点 | 自动切换 Fallback 模式 |
+
+---
 
 ## Harness 模式约定
 
 1. **Step 0 必须先执行** — 没有产品信息无法生成内容方案
-2. **采集类脚本用 Task 子智能体执行**，只返回文件路径和摘要，不返回完整数据
-3. **中间 JSON 写 `output/`**，传路径不传内容
-4. **Agent 自己做 Step 2 和 Step 3 的 AI 分析**，参考 `reference/prompt-templates.md`
-5. **Step 4 的 2 个 export 脚本必须全部执行**，用子智能体并行
-6. 分析趋势时注意 `platform_updated_at` 和 `source_type` 字段判断时效性
-7. 产品画像从用户对话或 PDF 文本中提取，Agent 自己结构化
-8. web-access 是可选增强，没有也不影响核心流程
+2. **Fast/Full 模式根据用户意图自动选择**
+3. **采集类脚本用 Task 子智能体执行**，只返回文件路径和摘要，不返回完整数据
+4. **中间 JSON 写 `output/`**，传路径不传内容
+5. **Agent 自己做 Step 2 和 Step 3 的 AI 分析**，参考 `reference/prompt-templates.md`
+6. **相关性评分必须执行**，低于阈值不生成内容
+7. **Fallback 模式自动触发**，无合适热点时不卡死
+8. 分析趋势时注意 `platform_updated_at` 和 `source_type` 字段判断时效性
